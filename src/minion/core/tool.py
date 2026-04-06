@@ -36,19 +36,21 @@ class Tool:
     fn: Callable[..., Any]
     parameters: dict[str, Any]       # JSON Schema for params (excludes ctx)
     required: list[str]
+    input_schema: dict[str, Any] | None = None
     output_policy: ToolOutputPolicy = field(default_factory=ToolOutputPolicy)
     is_async: bool = False
 
     def schema(self) -> dict[str, Any]:
         """Return the tool schema sent to the model."""
+        input_schema = self.input_schema or {
+            "type": "object",
+            "properties": self.parameters,
+            "required": self.required,
+        }
         return {
             "name": self.name,
             "description": self.description,
-            "input_schema": {
-                "type": "object",
-                "properties": self.parameters,
-                "required": self.required,
-            },
+            "input_schema": input_schema,
         }
 
     async def execute(self, ctx: Any, **kwargs: Any) -> ToolResult:

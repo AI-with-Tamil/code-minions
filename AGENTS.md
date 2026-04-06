@@ -193,7 +193,16 @@ JudgeNode(
 MCP is the universal tool bus. Stripe (~500 tools), Ramp, LinkedIn, Atlassian, Uber, GitHub Copilot all use it.
 
 ```python
-from minion.tools.mcp import mcp_tools
+from minion.tools.mcp import MCPServerConfig, mcp_tools, register_mcp_server
+
+register_mcp_server(
+    "github",
+    MCPServerConfig(
+        transport="streamable_http",
+        url="https://mcp.example.com/github/mcp",
+        headers={"Authorization": "Bearer ..."},
+    ),
+)
 
 AgentNode(
     "implement",
@@ -207,6 +216,7 @@ AgentNode(
 
 MCP servers are just another tool source. Same `@tool` contract underneath.
 Per-node tool curation is intentional — agents perform better with fewer, focused tools.
+Supported transports: `stdio`, `streamable_http`, and legacy `sse` fallback.
 
 ---
 
@@ -295,7 +305,7 @@ minion/
 │   ├── shell.py                 # run_command, git ops
 │   ├── search.py                # grep, glob
 │   ├── ci.py                    # run_tests, run_linter
-│   └── mcp.py                   # mcp_tools() loader
+│   └── mcp/                     # MCP client subsystem (tools/resources/prompts/transports)
 ├── blueprints/
 │   └── coding.py                # coding_blueprint (default)
 ├── _internal/
@@ -398,7 +408,7 @@ Phase 3 — Environments
   environments/docker.py (primary), environments/local.py, environments/worktree.py
 
 Phase 4 — Built-in tools
-  tools/code.py, tools/shell.py, tools/search.py, tools/ci.py, tools/mcp.py
+  tools/code.py, tools/shell.py, tools/search.py, tools/ci.py, tools/mcp/
 
 Phase 5 — Feedback loop + runner
   core/minion.py (ties everything), blueprints/coding.py

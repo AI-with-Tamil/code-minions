@@ -92,9 +92,49 @@ CI_TOOLS     # run_tests, run_linter, get_test_output
 ## MCP tools
 
 ```python
-from minion.tools import mcp_tools
+from minion.tools import (
+    MCPClient,
+    MCPServerConfig,
+    get_mcp_prompt,
+    list_mcp_prompts,
+    list_mcp_resources,
+    mcp_tools,
+    read_mcp_resource,
+    register_mcp_server,
+)
 
 mcp_tools(server: str, tools: list[str] | None = None) -> list[Tool]
 # tools=None loads all tools from that server
 # tools=[...] loads only named tools (curated subset)
+
+register_mcp_server(
+    "github",
+    MCPServerConfig(
+        transport="streamable_http",
+        url="https://mcp.example.com/github/mcp",
+        headers={"Authorization": "Bearer ..."},
+    ),
+)
+
+tools = mcp_tools("github", tools=["create_pr", "get_issue"])
+
+resources = list_mcp_resources("github")
+readme = read_mcp_resource("github", "repo://README.md")
+
+prompts = list_mcp_prompts("github")
+review = get_mcp_prompt("github", "review_pr", {"pr_number": "123"})
 ```
+
+Supported transports:
+- `stdio` — primary local/server subprocess mode
+- `streamable_http` — latest standard remote transport
+- `sse` — legacy compatibility for older MCP servers
+
+Advanced path:
+- `MCPClient` for direct access to `list_tools`, `call_tool`, `list_resources`, `read_resource`, `list_prompts`, and `get_prompt`
+- session initialization captures server capabilities and protocol metadata
+
+Named server resolution order:
+- explicit keyword overrides passed to `mcp_tools(...)`
+- `register_mcp_server(...)`
+- environment variables like `MINION_MCP_GITHUB_COMMAND` or `MINION_MCP_GITHUB_URL`

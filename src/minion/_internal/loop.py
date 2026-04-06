@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass
 from typing import Any
 
 from minion.core.context import RunContext
 from minion.core.tool import Tool, ToolResult
-from minion.models._base import Message, ModelResponse, ToolCall, ToolSchema
+from minion.models._base import Message, ModelResponse, ToolSchema
 
 
 class _AgentDone(BaseException):
@@ -107,7 +106,7 @@ async def run_agent_loop(
         ToolSchema(
             name=t.name,
             description=t.description,
-            input_schema={
+            input_schema=t.input_schema or {
                 "type": "object",
                 "properties": t.parameters,
                 "required": t.required,
@@ -133,9 +132,9 @@ async def run_agent_loop(
     if ctx.task.acceptance:
         user_content += f"\n\nAcceptance criteria: {ctx.task.acceptance}"
     if ctx.task.constraints:
-        user_content += f"\n\nConstraints:\n" + "\n".join(f"- {c}" for c in ctx.task.constraints)
+        user_content += "\n\nConstraints:\n" + "\n".join(f"- {c}" for c in ctx.task.constraints)
     if ctx.task.context:
-        user_content += f"\n\nContext files:\n" + "\n".join(f"- {c}" for c in ctx.task.context)
+        user_content += "\n\nContext files:\n" + "\n".join(f"- {c}" for c in ctx.task.context)
 
     messages: list[Message] = [Message(role="user", content=user_content)]
 

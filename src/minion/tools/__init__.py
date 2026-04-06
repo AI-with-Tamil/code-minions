@@ -10,7 +10,19 @@ from minion.tools.shell import (
     run_command,
 )
 from minion.tools.ci import get_test_output, run_linter, run_tests
-from minion.tools.mcp import mcp_tools
+from minion.tools.mcp import (
+    MCPClient,
+    MCPConfigurationError,
+    MCPProtocolError,
+    MCPServerConfig,
+    MCPTransportError,
+    get_mcp_prompt,
+    list_mcp_prompts,
+    list_mcp_resources,
+    mcp_tools,
+    read_mcp_resource,
+    register_mcp_server,
+)
 
 CODE_TOOLS = [read_file, write_file, edit_file, grep, glob]
 SHELL_TOOLS = [run_command, git_diff, git_log, git_status, git_add, git_commit]
@@ -21,6 +33,16 @@ __all__ = [
     "SHELL_TOOLS",
     "CI_TOOLS",
     "mcp_tools",
+    "MCPClient",
+    "MCPServerConfig",
+    "MCPConfigurationError",
+    "MCPTransportError",
+    "MCPProtocolError",
+    "register_mcp_server",
+    "list_mcp_resources",
+    "read_mcp_resource",
+    "list_mcp_prompts",
+    "get_mcp_prompt",
     "read_file",
     "write_file",
     "edit_file",
