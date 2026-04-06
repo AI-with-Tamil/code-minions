@@ -17,6 +17,7 @@ The live source of truth is:
 - [`examples/`](/Users/tamil/Developers/workflows/examples)
 - [`docs/api/`](/Users/tamil/Developers/workflows/docs/api)
 - [GitHub maintenance guide](/Users/tamil/Developers/workflows/docs/github-maintenance.md)
+- [Real LLM run guide](/Users/tamil/Developers/workflows/docs/real-llm-run.md)
 
 If one of those disagrees with older design notes, the current contract wins.
 

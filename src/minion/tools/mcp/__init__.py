@@ -1,5 +1,6 @@
 """Package-level MCP client support for Minion."""
 
+from minion.tools.mcp.auth import InMemoryTokenStorage, build_oauth_client_metadata, create_oauth_provider
 from minion.tools.mcp.client import MCPClient
 from minion.tools.mcp.compat import mcp_sdk_version
 from minion.tools.mcp.completions import complete_mcp_prompt, complete_mcp_resource_template
@@ -25,6 +26,9 @@ from minion.tools.mcp.tools import mcp_tools
 
 __all__ = [
     "MCPClient",
+    "InMemoryTokenStorage",
+    "create_oauth_provider",
+    "build_oauth_client_metadata",
     "MCPServerConfig",
     "Transport",
     "MCPError",

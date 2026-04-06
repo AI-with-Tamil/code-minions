@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import socket
+import subprocess
 import sys
+import time
 
 import pytest
 from pydantic import BaseModel
@@ -11,10 +15,13 @@ from pydantic import BaseModel
 from minion import RunConfig, RunContext, Task
 from minion.testing import MockEnvironment, MockModel
 from minion.tools import (
+    InMemoryTokenStorage,
     MCPClient,
     MCPServerConfig,
+    build_oauth_client_metadata,
     complete_mcp_prompt,
     complete_mcp_resource_template,
+    create_oauth_provider,
     get_mcp_prompt,
     get_mcp_display_name,
     list_mcp_prompts,
@@ -90,6 +97,61 @@ if __name__ == "__main__":
 """.strip()
     )
     return str(server_file)
+
+
+def _write_streamable_http_server(tmp_path) -> str:
+    server_file = tmp_path / "mcp_http_server.py"
+    server_file.write_text(
+        """
+import os
+import uvicorn
+from mcp.server.fastmcp import FastMCP
+
+port = int(os.environ["MINION_TEST_MCP_PORT"])
+mcp = FastMCP("http-test-server", host="127.0.0.1", port=port)
+
+@mcp.tool()
+def echo(value: str) -> str:
+    return f"http:{value}"
+
+@mcp.resource("memo://http")
+def http_resource() -> str:
+    return "hello from http resource"
+
+@mcp.prompt()
+def explain(topic: str) -> str:
+    return f"Explain {topic}"
+
+app = mcp.streamable_http_app()
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+""".strip()
+    )
+    return str(server_file)
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _wait_for_http_server(url: str, timeout_seconds: float = 10.0) -> None:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 80
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=0.5):
+                return
+        except Exception:
+            pass
+        time.sleep(0.1)
+    raise RuntimeError(f"Timed out waiting for MCP HTTP server at {url}")
 
 
 @pytest.mark.asyncio
@@ -204,3 +266,71 @@ def test_mcp_tools_resolve_named_server_from_env(tmp_path, monkeypatch):
 
     tools = mcp_tools("test-server", tools=["echo"])
     assert [tool.name for tool in tools] == ["echo"]
+
+
+def test_oauth_helper_builders():
+    metadata = build_oauth_client_metadata(
+        redirect_uris=["http://localhost:3000/callback"],
+        scope="user",
+        client_name="Minion Test Client",
+    )
+    storage = InMemoryTokenStorage()
+    provider = create_oauth_provider(
+        server_url="https://auth.example.com",
+        client_metadata=metadata,
+        storage=storage,
+        redirect_handler=lambda url: _noop_redirect(url),
+        callback_handler=_noop_callback,
+    )
+
+    assert metadata.client_name == "Minion Test Client"
+    assert storage.tokens is None
+    assert provider is not None
+
+
+async def _noop_redirect(url: str) -> None:
+    return None
+
+
+async def _noop_callback() -> tuple[str, str | None]:
+    return ("code", None)
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_mcp_client_round_trip(tmp_path):
+    server_script = _write_streamable_http_server(tmp_path)
+    port = _free_port()
+    env = dict(os.environ)
+    env["MINION_TEST_MCP_PORT"] = str(port)
+    proc = subprocess.Popen(
+        [sys.executable, server_script],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    try:
+        _wait_for_http_server(f"http://127.0.0.1:{port}/mcp")
+        async with MCPClient(
+            MCPServerConfig(
+                transport="streamable_http",
+                url=f"http://127.0.0.1:{port}/mcp",
+            )
+        ) as client:
+            assert client.initialization.protocol_version is not None
+            tools = await client.list_tools()
+            resources = await client.list_resources()
+            prompts = await client.list_prompts()
+            tool_result = await client.call_tool("echo", {"value": "hello"})
+
+            assert {tool.name for tool in tools} == {"echo"}
+            assert [str(resource.uri) for resource in resources] == ["memo://http"]
+            assert [prompt.name for prompt in prompts] == ["explain"]
+            assert "http:hello" in (tool_result.content[0].text if tool_result.content else "")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
