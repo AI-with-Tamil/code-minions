@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
+from minion._internal.env import load_env_file
 from minion.models._base import Message, ModelResponse, ToolCall, ToolSchema
 
 
@@ -14,11 +16,15 @@ class ClaudeModel:
         self,
         model: str = "claude-sonnet-4-6",
         api_key: str | None = None,
+        base_url: str | None = None,
         max_tokens: int = 8096,
         temperature: float = 1.0,
     ) -> None:
-        self.model = model
+        load_env_file(Path.cwd() / ".env")
+        self.model = _resolve_anthropic_model_alias(model)
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+        self.auth_token = os.environ.get("ANTHROPIC_API_TOKEN", "")
+        self.base_url = base_url or os.environ.get("ANTHROPIC_BASE_URL", "")
         self.max_tokens = max_tokens
         self.temperature = temperature
 
@@ -38,11 +44,21 @@ class ClaudeModel:
             )
 
         if not self.api_key:
-            raise RuntimeError(
-                "No Anthropic API key. Set ANTHROPIC_API_KEY or pass api_key= to ClaudeModel."
-            )
+            if not self.auth_token:
+                raise RuntimeError(
+                    "No Anthropic credentials. Set ANTHROPIC_API_KEY or ANTHROPIC_API_TOKEN, "
+                    "or pass api_key= to ClaudeModel."
+                )
 
-        client = anthropic.AsyncAnthropic(api_key=self.api_key)
+        client_kwargs: dict[str, str] = {}
+        if self.api_key:
+            client_kwargs["api_key"] = self.api_key
+        if self.auth_token:
+            client_kwargs["auth_token"] = self.auth_token
+        if self.base_url:
+            client_kwargs["base_url"] = self.base_url
+
+        client = anthropic.AsyncAnthropic(**client_kwargs)
 
         # Convert messages
         api_messages = []
@@ -115,3 +131,15 @@ class ClaudeModel:
             input_tokens=resp.usage.input_tokens,
             output_tokens=resp.usage.output_tokens,
         )
+
+
+def _resolve_anthropic_model_alias(model: str) -> str:
+    if model.startswith("claude") or model.startswith("anthropic"):
+        lowered = model.lower()
+        if "haiku" in lowered:
+            return os.environ.get("ANTHROPIC_HAIKU_MODEL", model)
+        if "opus" in lowered:
+            return os.environ.get("ANTHROPIC_OPUS_MODEL", model)
+        if "sonnet" in lowered:
+            return os.environ.get("ANTHROPIC_SONNET_MODEL", model)
+    return model

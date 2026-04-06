@@ -25,6 +25,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from minion._internal.env import load_env_file
 from minion import AgentNode, Blueprint, DeterministicNode, Minion, RunContext, Task
 from minion.environments import LocalEnv
 from minion.tools import CODE_TOOLS, SHELL_TOOLS
@@ -37,9 +38,12 @@ class SmokeState(BaseModel):
 
 
 def _choose_model(explicit: str | None) -> str:
+    load_env_file(Path.cwd() / ".env")
     if explicit:
         return explicit
     if os.environ.get("ANTHROPIC_API_KEY"):
+        return "claude-sonnet-4-6"
+    if os.environ.get("ANTHROPIC_API_TOKEN"):
         return "claude-sonnet-4-6"
     if os.environ.get("OPENAI_API_KEY"):
         return "gpt-4o"
@@ -58,6 +62,8 @@ def _run(cmd: list[str], cwd: Path) -> None:
 def _write_repo(root: Path) -> None:
     (root / "src").mkdir(parents=True, exist_ok=True)
     (root / "tests").mkdir(parents=True, exist_ok=True)
+
+    (root / "src" / "__init__.py").write_text("", encoding="utf-8")
 
     (root / "src" / "app.py").write_text(
         "def sanitize_username(value: str) -> str:\n"
@@ -91,11 +97,12 @@ async def create_branch(ctx: RunContext) -> None:
 
 
 async def run_tests(ctx: RunContext) -> None:
-    result = await ctx.exec("pytest -q")
+    result = await ctx.exec("PYTHONPATH=. pytest -q")
     ctx.state.tests_passed = result.exit_code == 0
     ctx.state.test_output = result.stdout + result.stderr
     if not ctx.state.tests_passed:
         ctx.log(ctx.state.test_output)
+        raise RuntimeError("Smoke tests failed")
 
 
 smoke_blueprint = Blueprint(
@@ -135,7 +142,7 @@ async def main() -> None:
         task = Task(
             description="Add normalize_email(value: str) to src/app.py so the tests pass.",
             context=["src/app.py", "tests/test_app.py"],
-            acceptance="pytest -q",
+            acceptance="PYTHONPATH=. pytest -q",
             constraints=[
                 "Only modify src/app.py unless absolutely necessary",
                 "Do not change the tests",
