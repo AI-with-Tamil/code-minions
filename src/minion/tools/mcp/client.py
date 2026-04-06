@@ -59,14 +59,58 @@ class MCPClient:
     async def list_resources(self) -> list[Any]:
         return await _collect_paginated(self.session.list_resources, "resources")
 
+    async def list_resource_templates(self) -> list[Any]:
+        return await _collect_paginated(self.session.list_resource_templates, "resourceTemplates")
+
     async def read_resource(self, uri: str) -> Any:
         return await self.session.read_resource(uri)
+
+    async def subscribe_resource(self, uri: str) -> Any:
+        return await self.session.subscribe_resource(uri)
+
+    async def unsubscribe_resource(self, uri: str) -> Any:
+        return await self.session.unsubscribe_resource(uri)
 
     async def list_prompts(self) -> list[Any]:
         return await _collect_paginated(self.session.list_prompts, "prompts")
 
     async def get_prompt(self, name: str, arguments: dict[str, str] | None = None) -> Any:
         return await self.session.get_prompt(name, arguments=arguments or {})
+
+    async def complete_prompt(
+        self,
+        *,
+        name: str,
+        argument_name: str,
+        argument_value: str,
+        context_arguments: dict[str, str] | None = None,
+    ) -> Any:
+        from mcp import types
+
+        return await self.session.complete(
+            ref=types.PromptReference(type="ref/prompt", name=name),
+            argument={"name": argument_name, "value": argument_value},
+            context_arguments=context_arguments,
+        )
+
+    async def complete_resource_template(
+        self,
+        *,
+        uri_template: str,
+        argument_name: str,
+        argument_value: str,
+        context_arguments: dict[str, str] | None = None,
+    ) -> Any:
+        from mcp import types
+
+        return await self.session.complete(
+            ref=types.ResourceTemplateReference(type="ref/resource", uri=uri_template),
+            argument={"name": argument_name, "value": argument_value},
+            context_arguments=context_arguments,
+        )
+
+    async def send_ping(self) -> Any:
+        return await self.session.send_ping()
 
 
 async def _collect_paginated(method: Any, field_name: str) -> list[Any]:

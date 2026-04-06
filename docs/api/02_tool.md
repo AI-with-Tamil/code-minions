@@ -95,12 +95,18 @@ CI_TOOLS     # run_tests, run_linter, get_test_output
 from minion.tools import (
     MCPClient,
     MCPServerConfig,
+    complete_mcp_prompt,
+    complete_mcp_resource_template,
     get_mcp_prompt,
+    get_mcp_display_name,
     list_mcp_prompts,
+    list_mcp_resource_templates,
     list_mcp_resources,
     mcp_tools,
     read_mcp_resource,
     register_mcp_server,
+    subscribe_mcp_resource,
+    unsubscribe_mcp_resource,
 )
 
 mcp_tools(server: str, tools: list[str] | None = None) -> list[Tool]
@@ -120,9 +126,25 @@ tools = mcp_tools("github", tools=["create_pr", "get_issue"])
 
 resources = list_mcp_resources("github")
 readme = read_mcp_resource("github", "repo://README.md")
+templates = list_mcp_resource_templates("github")
 
 prompts = list_mcp_prompts("github")
 review = get_mcp_prompt("github", "review_pr", {"pr_number": "123"})
+
+styles = complete_mcp_prompt(
+    "github",
+    name="review_pr",
+    argument_name="style",
+    argument_value="f",
+)
+
+repos = complete_mcp_resource_template(
+    "github",
+    uri_template="repo://{owner}/{repo}",
+    argument_name="repo",
+    argument_value="min",
+    context_arguments={"owner": "tamilarasan"},
+)
 ```
 
 Supported transports:
@@ -132,7 +154,9 @@ Supported transports:
 
 Advanced path:
 - `MCPClient` for direct access to `list_tools`, `call_tool`, `list_resources`, `read_resource`, `list_prompts`, and `get_prompt`
+- `MCPClient` also exposes `list_resource_templates`, `complete_prompt`, `complete_resource_template`, `subscribe_resource`, `unsubscribe_resource`, and `send_ping`
 - session initialization captures server capabilities and protocol metadata
+- `get_mcp_display_name()` uses MCP metadata precedence for user-facing labels
 
 Named server resolution order:
 - explicit keyword overrides passed to `mcp_tools(...)`

@@ -217,6 +217,7 @@ AgentNode(
 MCP servers are just another tool source. Same `@tool` contract underneath.
 Per-node tool curation is intentional — agents perform better with fewer, focused tools.
 Supported transports: `stdio`, `streamable_http`, and legacy `sse` fallback.
+The MCP package also exposes resource, prompt, template, and completion helpers for deterministic context hydration before agent execution.
 
 ---
 

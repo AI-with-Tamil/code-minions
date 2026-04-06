@@ -13,8 +13,12 @@ from minion.testing import MockEnvironment, MockModel
 from minion.tools import (
     MCPClient,
     MCPServerConfig,
+    complete_mcp_prompt,
+    complete_mcp_resource_template,
     get_mcp_prompt,
+    get_mcp_display_name,
     list_mcp_prompts,
+    list_mcp_resource_templates,
     list_mcp_resources,
     mcp_tools,
     read_mcp_resource,
@@ -59,9 +63,27 @@ def add(a: int, b: int) -> dict:
 def greeting() -> str:
     return "hello from resource"
 
+@mcp.resource("greeting://{name}")
+def dynamic_greeting(name: str) -> str:
+    return f"hello {name}"
+
 @mcp.prompt()
-def review_code(code: str) -> str:
-    return f"Review this code: {code}"
+def review_code(code: str, style: str = "friendly") -> str:
+    return f"Review this code in {style} style: {code}"
+
+@mcp.completion()
+async def complete(ref, argument, context):
+    uri = getattr(ref, "uri", "")
+    name = getattr(ref, "name", "")
+    if uri == "greeting://{name}" and argument.name == "name":
+        prefix = argument.value.lower()
+        values = [value for value in ["Alice", "Alicia", "Bob"] if value.lower().startswith(prefix)]
+        return {"values": values}
+    if name == "review_code" and argument.name == "style":
+        prefix = argument.value.lower()
+        values = [value for value in ["friendly", "formal", "casual"] if value.startswith(prefix)]
+        return {"values": values}
+    return {"values": []}
 
 if __name__ == "__main__":
     mcp.run("stdio")
@@ -106,8 +128,11 @@ def test_mcp_resources_and_prompts_stdio_server(tmp_path):
     )
 
     resources = list_mcp_resources(config)
-    assert len(resources) == 1
-    assert str(resources[0].uri) == "memo://greeting"
+    assert {str(resource.uri) for resource in resources} == {"memo://greeting"}
+
+    templates = list_mcp_resource_templates(config)
+    assert [template.uriTemplate for template in templates] == ["greeting://{name}"]
+    assert get_mcp_display_name(templates[0]) == "dynamic_greeting"
 
     resource_text = read_mcp_resource(config, "memo://greeting")
     assert resource_text == "hello from resource"
@@ -115,9 +140,26 @@ def test_mcp_resources_and_prompts_stdio_server(tmp_path):
     prompts = list_mcp_prompts(config)
     assert len(prompts) == 1
     assert prompts[0].name == "review_code"
+    assert get_mcp_display_name(prompts[0]) == "review_code"
 
-    prompt_text = get_mcp_prompt(config, "review_code", {"code": "print('hi')"})
-    assert "Review this code: print('hi')" in prompt_text
+    prompt_text = get_mcp_prompt(config, "review_code", {"code": "print('hi')", "style": "formal"})
+    assert "Review this code in formal style: print('hi')" in prompt_text
+
+    prompt_completions = complete_mcp_prompt(
+        config,
+        name="review_code",
+        argument_name="style",
+        argument_value="f",
+    )
+    assert prompt_completions == ["friendly", "formal"]
+
+    template_completions = complete_mcp_resource_template(
+        config,
+        uri_template="greeting://{name}",
+        argument_name="name",
+        argument_value="Al",
+    )
+    assert template_completions == ["Alice", "Alicia"]
 
 
 @pytest.mark.asyncio
@@ -132,11 +174,27 @@ async def test_mcp_client_lists_tools_resources_and_prompts(tmp_path):
     ) as client:
         tools = await client.list_tools()
         resources = await client.list_resources()
+        templates = await client.list_resource_templates()
         prompts = await client.list_prompts()
+        prompt_completion = await client.complete_prompt(
+            name="review_code",
+            argument_name="style",
+            argument_value="c",
+        )
+        template_completion = await client.complete_resource_template(
+            uri_template="greeting://{name}",
+            argument_name="name",
+            argument_value="B",
+        )
+        ping_result = await client.send_ping()
 
         assert {tool.name for tool in tools} == {"echo", "add"}
         assert [str(resource.uri) for resource in resources] == ["memo://greeting"]
+        assert [template.uriTemplate for template in templates] == ["greeting://{name}"]
         assert [prompt.name for prompt in prompts] == ["review_code"]
+        assert prompt_completion.completion.values == ["casual"]
+        assert template_completion.completion.values == ["Bob"]
+        assert ping_result is not None
 
 
 def test_mcp_tools_resolve_named_server_from_env(tmp_path, monkeypatch):
