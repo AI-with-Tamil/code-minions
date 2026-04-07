@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import html
 import re
+import shlex
+from urllib.parse import quote as urlquote
 
 from minion.core.context import RunContext
 from minion.core.tool import tool
@@ -32,7 +34,7 @@ async def web_fetch(ctx: RunContext, url: str, max_chars: int = 30_000) -> str:
     result = await ctx.exec(
         f"curl -sL --max-time 15 --max-filesize 2097152 "
         f"-H 'User-Agent: Minion-SDK/0.1' "
-        f"'{url}'"
+        f"{shlex.quote(url)}"
     )
     if result.exit_code != 0:
         return f"[fetch failed: {result.stderr.strip() or 'exit code ' + str(result.exit_code)}]"
@@ -59,7 +61,7 @@ async def web_search(ctx: RunContext, query: str, num_results: int = 5) -> str:
     check = await ctx.exec("command -v ddgr")
     if check.exit_code == 0:
         result = await ctx.exec(
-            f"ddgr --json -n {num_results} '{query}' 2>/dev/null"
+            f"ddgr --json -n {num_results} {shlex.quote(query)} 2>/dev/null"
         )
         if result.exit_code == 0 and result.stdout.strip():
             return result.stdout
@@ -68,7 +70,7 @@ async def web_search(ctx: RunContext, query: str, num_results: int = 5) -> str:
     check = await ctx.exec("command -v googler")
     if check.exit_code == 0:
         result = await ctx.exec(
-            f"googler --json -n {num_results} '{query}' 2>/dev/null"
+            f"googler --json -n {num_results} {shlex.quote(query)} 2>/dev/null"
         )
         if result.exit_code == 0 and result.stdout.strip():
             return result.stdout
@@ -76,7 +78,7 @@ async def web_search(ctx: RunContext, query: str, num_results: int = 5) -> str:
     # Fallback: curl-based DuckDuckGo lite
     result = await ctx.exec(
         f"curl -sL --max-time 10 "
-        f"'https://lite.duckduckgo.com/lite/?q={query}' "
+        f"'https://lite.duckduckgo.com/lite/?q={urlquote(query)}' "
         f"-H 'User-Agent: Minion-SDK/0.1'"
     )
     if result.exit_code == 0 and result.stdout.strip():

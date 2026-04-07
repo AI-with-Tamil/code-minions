@@ -53,6 +53,11 @@ class GitWorktreeEnv:
             stderr=asyncio.subprocess.PIPE,
         )
         await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"Failed to create worktree: branch={self._branch_name} "
+                f"path={self._worktree_path} (exit code {proc.returncode})"
+            )
 
     async def read(self, path: str) -> str:
         full = self._resolve(path)
@@ -105,8 +110,18 @@ class GitWorktreeEnv:
                 stderr=asyncio.subprocess.PIPE,
             )
             await proc.communicate()
+            if proc.returncode != 0:
+                # Log but don't fail — cleanup is best-effort
+                pass  # Orphan worktrees can be cleaned up manually
 
     def _resolve(self, path: str) -> str:
+        """Resolve path and ensure it stays within self.path (prevent traversal)."""
         if os.path.isabs(path):
-            return path
-        return os.path.join(self.path, path)
+            path = path.lstrip("/")
+        full = os.path.normpath(os.path.join(self.path, path))
+        real_base = os.path.realpath(self.path)
+        if not full.startswith(real_base + os.sep) and full != real_base:
+            raise ValueError(
+                f"Path traversal blocked: {path!r} resolves outside sandbox ({self.path})"
+            )
+        return full

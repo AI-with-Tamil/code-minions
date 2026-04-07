@@ -67,6 +67,17 @@ class LocalEnv:
         pass  # LocalEnv has nothing to clean up
 
     def _resolve(self, path: str) -> str:
+        """Resolve path and ensure it stays within self.path (prevent traversal)."""
+        # Always join relative to self.path, even for absolute paths
+        # This prevents agents from escaping the sandbox via absolute paths
         if os.path.isabs(path):
-            return path
-        return os.path.join(self.path, path)
+            # Strip leading slash and treat as relative to self.path
+            path = path.lstrip("/")
+        full = os.path.normpath(os.path.join(self.path, path))
+        # Verify the resolved path is within self.path
+        real_base = os.path.realpath(self.path)
+        if not full.startswith(real_base + os.sep) and full != real_base:
+            raise ValueError(
+                f"Path traversal blocked: {path!r} resolves outside sandbox ({self.path})"
+            )
+        return full

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass, field
 
 from minion.core.context import ExecResult
@@ -55,7 +56,7 @@ class DockerEnv:
         self._container_id = container.id
 
     async def read(self, path: str) -> str:
-        result = await self.exec(f"cat {path}")
+        result = await self.exec(f"cat {shlex.quote(path)}")
         if result.exit_code != 0:
             raise FileNotFoundError(f"File not found in container: {path}")
         return result.stdout
@@ -63,7 +64,8 @@ class DockerEnv:
     async def write(self, path: str, content: str) -> None:
         # Use heredoc to write content
         escaped = content.replace("'", "'\\''")
-        await self.exec(f"mkdir -p $(dirname {path}) && printf '%s' '{escaped}' > {path}")
+        safe_path = shlex.quote(path)
+        await self.exec(f"mkdir -p $(dirname {safe_path}) && printf '%s' '{escaped}' > {safe_path}")
 
     async def edit(self, path: str, old: str, new: str) -> None:
         content = await self.read(path)
@@ -92,7 +94,8 @@ class DockerEnv:
         return ExecResult(stdout=stdout, stderr=stderr, exit_code=exit_code)
 
     async def glob(self, pattern: str) -> list[str]:
-        result = await self.exec(f"find {self.working_dir} -path '{self.working_dir}/{pattern}'")
+        safe_pattern = shlex.quote(f"{self.working_dir}/{pattern}")
+        result = await self.exec(f"find {self.working_dir} -path {safe_pattern}")
         if not result.stdout.strip():
             return []
         return [
@@ -101,7 +104,8 @@ class DockerEnv:
         ]
 
     async def exists(self, path: str) -> bool:
-        result = await self.exec(f"test -e {path} && echo yes || echo no")
+        safe_path = shlex.quote(path)
+        result = await self.exec(f"test -e {safe_path} && echo yes || echo no")
         return result.stdout.strip() == "yes"
 
     async def cleanup(self) -> None:

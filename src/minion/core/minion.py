@@ -331,14 +331,18 @@ class Minion:
         task_runner = asyncio.create_task(self._run_internal(task, event_queue=queue))
 
         while True:
-            if task_runner.done() and queue.empty():
-                break
             try:
-                event = await asyncio.wait_for(queue.get(), timeout=0.05)
+                event = await asyncio.wait_for(queue.get(), timeout=0.1)
                 yield event
             except asyncio.TimeoutError:
-                continue
+                # No event available — check if runner is done
+                if task_runner.done():
+                    # Drain any remaining events
+                    while not queue.empty():
+                        yield await queue.get()
+                    break
 
+        # Re-raise any exception from the runner
         await task_runner
 
     async def run_batch(self, tasks: list[str | Task]) -> list[RunResult]:

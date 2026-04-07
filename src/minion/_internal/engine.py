@@ -163,7 +163,7 @@ async def _run_judge(
     blueprint: Blueprint,
 ) -> None:
     """Run judge evaluation. On veto, may re-enter the target AgentNode."""
-    # Find the target AgentNode
+    # Find the target AgentNode (search top-level, ParallelNode, and LoopNode sub_blueprints)
     target: AgentNode | None = None
     for n in blueprint.nodes:
         if isinstance(n, AgentNode) and n.name == node.evaluates:
@@ -171,6 +171,11 @@ async def _run_judge(
             break
         if isinstance(n, ParallelNode):
             for child in n.nodes:
+                if isinstance(child, AgentNode) and child.name == node.evaluates:
+                    target = child
+                    break
+        if isinstance(n, LoopNode) and isinstance(n.sub_blueprint, Blueprint):
+            for child in n.sub_blueprint.nodes:
                 if isinstance(child, AgentNode) and child.name == node.evaluates:
                     target = child
                     break

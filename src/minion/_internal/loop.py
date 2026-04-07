@@ -36,7 +36,8 @@ def _build_done_tool() -> Tool:
     """Build the auto-injected done() tool."""
     from minion.core.tool import Tool, ToolOutputPolicy
 
-    async def done_fn(ctx: RunContext, summary: str, files_changed: list[str] = []) -> str:  # noqa: B006
+    async def done_fn(ctx: RunContext, summary: str, files_changed: list[str] | None = None) -> str:
+        files_changed = files_changed or []
         raise _AgentDone(summary=summary, files_changed=files_changed)
 
     return Tool(

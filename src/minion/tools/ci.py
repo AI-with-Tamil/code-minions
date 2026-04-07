@@ -49,8 +49,12 @@ async def summarize_failure_output(ctx: RunContext, failure_text: str, max_items
     errors = []
     for line in lines:
         stripped = line.strip()
-        # Match common patterns: file.py:NN:..., E/FAIL lines, assert errors
-        if any(pattern in stripped for pattern in [":", "E ", "FAILED", "ERROR", "assert", "Error:", "error:"]):
+        # Match specific error patterns: file paths with line numbers, test failures, exceptions
+        is_error = any(pattern in stripped for pattern in [
+            ".py:", "E ", "FAILED", "ERROR", "assert", "Error:", "error:",
+            "SyntaxError", "TypeError", "ValueError", "ImportError",
+        ])
+        if is_error:
             # Skip noise lines
             if not any(skip in stripped for skip in [
                 "=== test session starts ===",
