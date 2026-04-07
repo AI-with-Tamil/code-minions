@@ -1,7 +1,8 @@
 """Built-in tool subsets."""
 
-from minion.tools.code import edit_file, glob, grep, read_file, write_file
+from minion.tools.code import edit_file, glob, grep, list_dir, read_file, write_file
 from minion.tools.shell import (
+    diff_history,
     git_add,
     git_commit,
     git_diff,
@@ -10,6 +11,8 @@ from minion.tools.shell import (
     run_command,
 )
 from minion.tools.ci import get_test_output, run_linter, run_tests
+from minion.tools.web import web_fetch, web_search
+from minion.tools.progress import get_todos, write_todos
 from minion.tools.mcp import (
     InMemoryTokenStorage,
     MCPClient,
@@ -33,14 +36,44 @@ from minion.tools.mcp import (
     unsubscribe_mcp_resource,
 )
 
-CODE_TOOLS = [read_file, write_file, edit_file, grep, glob]
-SHELL_TOOLS = [run_command, git_diff, git_log, git_status, git_add, git_commit]
+CODE_TOOLS = [read_file, write_file, edit_file, grep, glob, list_dir]
+SHELL_TOOLS = [run_command, git_diff, git_log, git_status, git_add, git_commit, diff_history]
 CI_TOOLS = [run_tests, run_linter, get_test_output]
+WEB_TOOLS = [web_fetch, web_search]
+PROGRESS_TOOLS = [write_todos, get_todos]
 
 __all__ = [
     "CODE_TOOLS",
     "SHELL_TOOLS",
     "CI_TOOLS",
+    "WEB_TOOLS",
+    "PROGRESS_TOOLS",
+    # Code tools
+    "read_file",
+    "write_file",
+    "edit_file",
+    "grep",
+    "glob",
+    "list_dir",
+    # Shell tools
+    "run_command",
+    "git_diff",
+    "git_log",
+    "git_status",
+    "git_add",
+    "git_commit",
+    "diff_history",
+    # CI tools
+    "run_tests",
+    "run_linter",
+    "get_test_output",
+    # Web tools
+    "web_fetch",
+    "web_search",
+    # Progress tools
+    "write_todos",
+    "get_todos",
+    # MCP
     "mcp_tools",
     "MCPClient",
     "InMemoryTokenStorage",
@@ -61,18 +94,4 @@ __all__ = [
     "complete_mcp_prompt",
     "complete_mcp_resource_template",
     "get_mcp_display_name",
-    "read_file",
-    "write_file",
-    "edit_file",
-    "grep",
-    "glob",
-    "run_command",
-    "git_diff",
-    "git_log",
-    "git_status",
-    "git_add",
-    "git_commit",
-    "run_tests",
-    "run_linter",
-    "get_test_output",
 ]

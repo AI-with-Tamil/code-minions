@@ -46,3 +46,33 @@ async def git_add(ctx: RunContext, paths: str = "-A") -> str:
 async def git_commit(ctx: RunContext, message: str) -> str:
     result = await ctx.exec(f'git commit -m "{message}"')
     return result.stdout
+
+
+@tool(description="Show what files changed and a summary of diffs")
+async def diff_history(ctx: RunContext, stat_only: bool = True) -> str:
+    """Show changes made during this session.
+
+    Checks both staged and unstaged changes. Gives the agent awareness of
+    what it has modified so far without needing to manually run git diff.
+    """
+    parts = []
+
+    # Changed files summary
+    status = await ctx.exec("git status --short")
+    if status.stdout.strip():
+        parts.append("Changed files:\n" + status.stdout.strip())
+
+    if stat_only:
+        # Compact summary: file names + lines changed
+        stat = await ctx.exec("git diff --stat HEAD 2>/dev/null || git diff --stat")
+        if stat.stdout.strip():
+            parts.append("\nDiff stats:\n" + stat.stdout.strip())
+    else:
+        # Full diff
+        diff = await ctx.exec("git diff HEAD 2>/dev/null || git diff")
+        if diff.stdout.strip():
+            parts.append("\nFull diff:\n" + diff.stdout.strip())
+
+    if not parts:
+        return "(no changes detected)"
+    return "\n".join(parts)

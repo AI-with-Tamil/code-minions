@@ -28,7 +28,15 @@ async def _create_branch(ctx: RunContext) -> None:
 
 async def _gather_context(ctx: RunContext) -> None:
     result = await ctx.exec("git log --oneline -10")
-    ctx.state.context_summary = result.stdout
+    parts = [result.stdout]
+    # Pre-read task.context files so the agent doesn't waste tokens fetching basics
+    for path in ctx.task.context:
+        try:
+            content = await ctx.read(path)
+            parts.append(f"--- {path} ---\n{content}")
+        except (FileNotFoundError, Exception):
+            parts.append(f"--- {path} (not found) ---")
+    ctx.state.context_summary = "\n\n".join(parts)
 
 
 async def _run_lint(ctx: RunContext) -> None:
@@ -82,7 +90,10 @@ coding_blueprint = Blueprint(
         DeterministicNode("lint", fn=_run_lint),
         AgentNode(
             "fix_lint",
-            system_prompt="Fix the lint errors shown below. Do not change anything else.",
+            system_prompt=(
+                "Fix the lint errors below. Do not change anything else.\n\n"
+                "LINT OUTPUT:\n{state.lint_output}"
+            ),
             tools=CODE_TOOLS,
             condition=lambda ctx: ctx.state.lint_failed,
             max_iterations=20,
@@ -92,7 +103,10 @@ coding_blueprint = Blueprint(
         DeterministicNode("test", fn=_run_tests),
         AgentNode(
             "fix_tests",
-            system_prompt="Fix the failing tests shown below. Do not change unrelated code.",
+            system_prompt=(
+                "Fix the failing tests below. Do not change unrelated code.\n\n"
+                "TEST OUTPUT:\n{state.test_output}"
+            ),
             tools=[*CODE_TOOLS, *SHELL_TOOLS],
             condition=lambda ctx: ctx.state.tests_failed,
             max_iterations=40,

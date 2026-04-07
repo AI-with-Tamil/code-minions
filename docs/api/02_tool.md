@@ -82,12 +82,61 @@ class ToolResult:
 ## Built-in tool subsets
 
 ```python
-from minion.tools import CODE_TOOLS, SHELL_TOOLS, CI_TOOLS
+from minion.tools import CODE_TOOLS, SHELL_TOOLS, CI_TOOLS, WEB_TOOLS, PROGRESS_TOOLS
 
-CODE_TOOLS   # read_file, write_file, edit_file, grep, glob
-SHELL_TOOLS  # run_command, git_diff, git_log, git_status, git_add, git_commit
-CI_TOOLS     # run_tests, run_linter, get_test_output
+CODE_TOOLS      # read_file, write_file, edit_file, grep, glob, list_dir
+SHELL_TOOLS     # run_command, git_diff, git_log, git_status, git_add, git_commit, diff_history
+CI_TOOLS        # run_tests, run_linter, get_test_output
+WEB_TOOLS       # web_fetch, web_search
+PROGRESS_TOOLS  # write_todos, get_todos
 ```
+
+### CODE_TOOLS
+
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read file contents |
+| `write_file` | Write content to a file (creates or overwrites) |
+| `edit_file` | Exact string replacement in a file |
+| `grep` | Regex content search across files |
+| `glob` | Find files matching a glob pattern |
+| `list_dir` | List files and directories (depth-limited, hides dotfiles) |
+
+### SHELL_TOOLS
+
+| Tool | Description |
+|------|-------------|
+| `run_command` | Run a shell command |
+| `git_diff` | Show git diff (staged or unstaged) |
+| `git_log` | Show recent git log |
+| `git_status` | Show git status (short format) |
+| `git_add` | Stage files for commit |
+| `git_commit` | Create a git commit |
+| `diff_history` | Show all changes made during this session (files + stats) |
+
+### CI_TOOLS
+
+| Tool | Description |
+|------|-------------|
+| `run_tests` | Run pytest with configurable path and flags |
+| `run_linter` | Run linter with autofix (default: ruff) |
+| `get_test_output` | Get last test output from state |
+
+### WEB_TOOLS
+
+| Tool | Description |
+|------|-------------|
+| `web_fetch` | Fetch a URL via curl, strip HTML tags, return text content |
+| `web_search` | Search the web (uses ddgr/googler CLI, or DuckDuckGo lite fallback) |
+
+For production web search, prefer an MCP search server (Brave, Google) for structured results.
+
+### PROGRESS_TOOLS
+
+| Tool | Description |
+|------|-------------|
+| `write_todos` | Create/update a structured task list for tracking multi-step work |
+| `get_todos` | Get the current task list with status indicators |
 
 ## MCP tools
 

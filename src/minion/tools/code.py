@@ -33,3 +33,21 @@ async def grep(ctx: RunContext, pattern: str, path: str = ".", recursive: bool =
 @tool(description="Find files matching a glob pattern")
 async def glob(ctx: RunContext, pattern: str) -> list[str]:
     return await ctx.env.glob(pattern)
+
+
+@tool(description="List files and directories in a path")
+async def list_dir(ctx: RunContext, path: str = ".", max_depth: int = 1) -> str:
+    """List directory contents. Returns file/dir names with type indicators.
+
+    Agents use this to orient in unfamiliar codebases before reading files.
+    """
+    if max_depth < 1:
+        max_depth = 1
+    if max_depth > 3:
+        max_depth = 3
+    # Use find for depth-limited listing with type indicators
+    result = await ctx.exec(
+        f"find {path} -maxdepth {max_depth} -not -path '*/\\.*' "
+        f"| sort"
+    )
+    return result.stdout

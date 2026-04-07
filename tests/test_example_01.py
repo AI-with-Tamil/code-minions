@@ -6,7 +6,6 @@ from minion import (
     AgentNode,
     Blueprint,
     DeterministicNode,
-    EscalationResult,
     RunContext,
 )
 from minion.tools import CODE_TOOLS, SHELL_TOOLS

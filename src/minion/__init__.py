@@ -26,7 +26,7 @@ from minion.environments.local import LocalEnv
 from minion.environments.worktree import GitWorktreeEnv
 
 # Tool subsets
-from minion.tools import CI_TOOLS, CODE_TOOLS, SHELL_TOOLS
+from minion.tools import CI_TOOLS, CODE_TOOLS, PROGRESS_TOOLS, SHELL_TOOLS, WEB_TOOLS
 
 # Built-in blueprints
 from minion.blueprints.coding import coding_blueprint
@@ -68,6 +68,8 @@ __all__ = [
     "CODE_TOOLS",
     "SHELL_TOOLS",
     "CI_TOOLS",
+    "WEB_TOOLS",
+    "PROGRESS_TOOLS",
     # Built-in blueprints
     "coding_blueprint",
     # Events

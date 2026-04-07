@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from minion.models._base import Message, ModelResponse, ToolCall, ToolSchema
+from minion.models._base import Message, ModelResponse, ToolSchema
 
 
 class MockExhaustedError(Exception):

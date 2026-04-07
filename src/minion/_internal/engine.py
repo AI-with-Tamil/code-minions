@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 from dataclasses import dataclass
-from typing import Any
 
 from minion._internal.loop import run_agent_loop
 from minion.core.blueprint import Blueprint
@@ -319,12 +318,22 @@ async def _run_loop(node: LoopNode, ctx: RunContext) -> None:
     items = node.iterate_over(ctx)
     max_iter = node.max_iterations or len(items)
 
+    # Collect sub-blueprint node names so we can reset their round counters
+    sub_node_names = [n.name for n in node.sub_blueprint.nodes]
+
     for i, item in enumerate(items):
         if i >= max_iter:
             break
 
         # Bind per-item state
         node.bind(ctx, item)
+
+        # Reset agent round counters for sub-blueprint nodes so each
+        # iteration gets fresh max_rounds budget (e.g. "3 retries per file")
+        rounds = getattr(ctx, "_agent_rounds", None)
+        if rounds is not None:
+            for name in sub_node_names:
+                rounds.pop(name, None)
 
         # Run the sub-blueprint
         try:

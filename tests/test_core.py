@@ -464,6 +464,74 @@ async def test_loop_node():
     assert result.state.processed == ["a.py", "b.py"]
 
 
+@pytest.mark.asyncio
+async def test_loop_node_with_agent_resets_rounds():
+    """LoopNode resets agent round counters per iteration.
+
+    Matches Example 03 (Airbnb migration): AgentNode with max_rounds=3 inside
+    a LoopNode should get fresh rounds budget per target file, not exhaust
+    rounds across all files.
+    """
+
+    class MState(BaseModel):
+        targets: list[str] = []
+        current: str = ""
+        migrated: list[str] = []
+
+    async def discover(ctx: RunContext) -> None:
+        ctx.state.targets = ["a.py", "b.py", "c.py", "d.py"]
+
+    async def record(ctx: RunContext) -> None:
+        ctx.state.migrated.append(ctx.state.current)
+
+    sub = Blueprint(
+        name="per_file",
+        nodes=[
+            AgentNode(
+                "migrate",
+                system_prompt="Migrate the file. Call done() when finished.",
+                tools=[],
+                max_iterations=10,
+                token_budget=5_000,
+                max_rounds=2,
+                on_max_rounds="continue",
+            ),
+            DeterministicNode("validate", fn=record),
+        ],
+    )
+
+    bp = Blueprint(
+        name="loop_rounds_test",
+        state_cls=MState,
+        nodes=[
+            DeterministicNode("discover", fn=discover),
+            LoopNode(
+                "loop",
+                sub_blueprint=sub,
+                iterate_over=lambda ctx: ctx.state.targets,
+                bind=lambda ctx, item: setattr(ctx.state, "current", item),
+                on_failure="continue",
+            ),
+        ],
+    )
+
+    # Each file needs one agent call that calls done(). 4 files = 4 responses.
+    result = await run_blueprint_test(
+        bp, "Migrate all files",
+        MockModel(responses=[
+            ModelResponse(tool_calls=[ToolCall("done", {"summary": "Migrated a.py", "files_changed": ["a.py"]})]),
+            ModelResponse(tool_calls=[ToolCall("done", {"summary": "Migrated b.py", "files_changed": ["b.py"]})]),
+            ModelResponse(tool_calls=[ToolCall("done", {"summary": "Migrated c.py", "files_changed": ["c.py"]})]),
+            ModelResponse(tool_calls=[ToolCall("done", {"summary": "Migrated d.py", "files_changed": ["d.py"]})]),
+        ]),
+        MockEnvironment(),
+    )
+
+    result.assert_passed()
+    # All 4 files should be migrated — rounds reset per iteration
+    assert result.state.migrated == ["a.py", "b.py", "c.py", "d.py"]
+
+
 # --- ParallelNode ---
 
 @pytest.mark.asyncio
