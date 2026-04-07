@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import PurePath
+import shlex
+
 from minion.core.context import RunContext
 from minion.core.tool import tool
 
 
-@tool(description="Find files by name or extension. Returns matching file paths. Use name_pattern for substring matching, use extension for filtering by file type (e.g. '.py', '.ts').")
+@tool(description="Find files by name and/or extension. Returns matching file paths. Use name_pattern for substring matching, extension for file-type filtering (e.g. '.py', '.ts'). If both are provided, files matching either condition are returned.")
 async def find_files(
     ctx: RunContext,
     path: str = ".",
@@ -14,29 +17,21 @@ async def find_files(
     extension: str = "",
     exclude_dirs: str = ".git,.venv,node_modules,__pycache__,.worktrees",
 ) -> str:
-    """Find files by name pattern or extension.
+    """Find files by name pattern and/or extension.
 
     Uses `find` under the hood. name_pattern does substring matching on filenames.
     extension filters by file extension (include the dot, e.g. '.py').
     exclude_dirs is a comma-separated list of directory names to skip.
     """
     # Build find command
-    cmd_parts = [f"find {path}"]
+    cmd_parts = [f"find {shlex.quote(path)}"]
 
     # Add exclusions
     for d in exclude_dirs.split(","):
         d = d.strip()
         if d:
-            cmd_parts.append(f"-not -path '*/{d}/*'")
-            cmd_parts.append(f"-not -name '{d}'")
-
-    # Add name pattern filter
-    if name_pattern:
-        cmd_parts.append(f"-name '*{name_pattern}*'")
-
-    # Add extension filter — find uses -name for this
-    if extension:
-        cmd_parts.append(f"-name '*{extension}'")
+            cmd_parts.append(f"-not -path {shlex.quote(f'*/{d}/*')}")
+            cmd_parts.append(f"-not -name {shlex.quote(d)}")
 
     # Only files
     cmd_parts.append("-type f")
@@ -45,11 +40,26 @@ async def find_files(
     cmd = " ".join(cmd_parts)
     result = await ctx.exec(cmd)
 
-    if not result.stdout.strip():
+    matches = [line for line in result.stdout.strip().splitlines() if line.strip()]
+    if name_pattern or extension:
+        filtered: list[str] = []
+        for entry in matches:
+            filename = PurePath(entry).name
+            name_ok = name_pattern in filename if name_pattern else False
+            ext_ok = filename.endswith(extension) if extension else False
+            if name_pattern and extension:
+                if name_ok or ext_ok:
+                    filtered.append(entry)
+            elif name_pattern and name_ok:
+                filtered.append(entry)
+            elif extension and ext_ok:
+                filtered.append(entry)
+        matches = filtered
+
+    if not matches:
         return f"No files found matching criteria in {path}"
 
-    lines = result.stdout.strip().splitlines()
-    return f"Found {len(lines)} file(s):\n" + "\n".join(lines[:200])
+    return f"Found {len(matches)} file(s):\n" + "\n".join(matches[:200])
 
 
 @tool(description="Search for files containing specific text content. Like grep but optimized for finding which files match, not showing the full content. Returns file paths only.")
@@ -79,8 +89,12 @@ async def search_files(
         flag_str = "-l"
     else:
         flag_str = "-li"
-    file_filter = f"--include='{file_pattern}'" if file_pattern else ""
-    cmd = f"grep -r {flag_str} {file_filter} '{query}' {path} 2>/dev/null | head -n {max_results} || true"
+    file_filter = f"--include={shlex.quote(file_pattern)} " if file_pattern else ""
+    max_results = max(1, min(max_results, 200))
+    cmd = (
+        f"grep -r {flag_str} {file_filter}{shlex.quote(query)} {shlex.quote(path)} "
+        f"2>/dev/null | head -n {max_results} || true"
+    )
 
     result = await ctx.exec(cmd)
 

@@ -63,17 +63,17 @@ class TestEditFile:
         )
         ctx = _make_ctx(env=env)
         result = await edit_file.execute(ctx, path="app.py", old="def bar():", new="def baz():")
-        assert "ERROR" in result.content
-        assert "not found" in result.content
-        assert "Hint" in result.content
+        assert result.error is not None
+        assert "not found" in result.error
+        assert "Hint" in result.error
 
     @pytest.mark.asyncio
     async def test_file_not_found(self):
         env = MockEnvironment(files={})
         ctx = _make_ctx(env=env)
         result = await edit_file.execute(ctx, path="missing.py", old="x", new="y")
-        assert "ERROR" in result.content
-        assert "File not found" in result.content
+        assert result.error is not None
+        assert "File not found" in result.error
 
 
 # ============================================================
@@ -127,8 +127,8 @@ class TestInsertBefore:
         result = await insert_before.execute(
             ctx, path="app.py", target="MISSING", content="# nope\n"
         )
-        assert "ERROR" in result.content
-        assert "not found" in result.content
+        assert result.error is not None
+        assert "not found" in result.error
 
 
 # ============================================================
@@ -185,8 +185,8 @@ class TestReplaceRegex:
         result = await replace_regex.execute(
             ctx, path="app.py", pattern=r"[invalid", replacement="x"
         )
-        assert "ERROR" in result.content
-        assert "Invalid regex" in result.content
+        assert result.error is not None
+        assert "Invalid regex" in result.error
 
     @pytest.mark.asyncio
     async def test_no_match(self):
@@ -195,8 +195,8 @@ class TestReplaceRegex:
         result = await replace_regex.execute(
             ctx, path="app.py", pattern=r"MISSING", replacement="x"
         )
-        assert "ERROR" in result.content
-        assert "matched 0" in result.content
+        assert result.error is not None
+        assert "matched 0" in result.error
 
 
 # ============================================================
@@ -227,7 +227,7 @@ class TestFindFiles:
     @pytest.mark.asyncio
     async def test_finds_by_extension(self):
         env = MockEnvironment(exec_results={
-            "find . -not -path '*/.git/*' -not -name '.git' -not -path '*/.venv/*' -not -name '.venv' -not -path '*/node_modules/*' -not -name 'node_modules' -not -path '*/__pycache__/*' -not -name '__pycache__' -not -path '*/.worktrees/*' -not -name '.worktrees' -name '*.py' -type f | sort":
+            "find . -not -path '*/.git/*' -not -name .git -not -path '*/.venv/*' -not -name .venv -not -path '*/node_modules/*' -not -name node_modules -not -path '*/__pycache__/*' -not -name __pycache__ -not -path '*/.worktrees/*' -not -name .worktrees -type f | sort":
                 "./src/app.py\n./tests/test_app.py\n",
         })
         ctx = _make_ctx(env=env)
@@ -238,7 +238,7 @@ class TestFindFiles:
     @pytest.mark.asyncio
     async def test_no_results(self):
         env = MockEnvironment(exec_results={
-            "find . -not -path '*/.git/*' -not -name '.git' -not -path '*/.venv/*' -not -name '.venv' -not -path '*/node_modules/*' -not -name 'node_modules' -not -path '*/__pycache__/*' -not -name '__pycache__' -not -path '*/.worktrees/*' -not -name '.worktrees' -name '*.rs' -type f | sort":
+            "find . -not -path '*/.git/*' -not -name .git -not -path '*/.venv/*' -not -name .venv -not -path '*/node_modules/*' -not -name node_modules -not -path '*/__pycache__/*' -not -name __pycache__ -not -path '*/.worktrees/*' -not -name .worktrees -type f | sort":
                 "",
         })
         ctx = _make_ctx(env=env)
@@ -265,7 +265,7 @@ class TestSearchFiles:
     @pytest.mark.asyncio
     async def test_no_match(self):
         env = MockEnvironment(exec_results={
-            "grep -r -li --include='*.py' 'NOTFOUND' . 2>/dev/null | head -n 50 || true":
+            "grep -r -li --include='*.py' NOTFOUND . 2>/dev/null | head -n 50 || true":
                 "",
         })
         ctx = _make_ctx(env=env)
@@ -366,7 +366,7 @@ class TestGitPush:
     @pytest.mark.asyncio
     async def test_push_no_upstream(self):
         env = MockEnvironment(exec_results={
-            "git push  origin main": "Everything up-to-date\n",
+            "git push origin main": "Everything up-to-date\n",
         })
         ctx = _make_ctx(env=env)
         result = await git_push.execute(ctx, set_upstream=False, branch="main")

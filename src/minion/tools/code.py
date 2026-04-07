@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 
 from minion.core.context import RunContext
 from minion.core.tool import tool
@@ -31,7 +32,7 @@ async def edit_file(ctx: RunContext, path: str, old: str, new: str) -> str:
     try:
         content = await ctx.read(path)
     except FileNotFoundError:
-        return f"ERROR: File not found: {path}"
+        raise FileNotFoundError(f"File not found: {path}") from None
 
     if old not in content:
         # Provide helpful context so the agent can fix its call
@@ -48,9 +49,9 @@ async def edit_file(ctx: RunContext, path: str, old: str, new: str) -> str:
             if similar:
                 lineno, match = similar[0]
                 hint = f"\nDid you mean line {lineno + 1}: {match[:120]}?"
-            return (
-                f"ERROR: Text not found in {path}: {old[:100]}...{hint}\n"
-                f"Hint: read the file first and use the exact text to replace."
+            raise ValueError(
+                f"Text not found in {path}: {old[:100]}...{hint}\n"
+                "Hint: read the file first and use the exact text to replace."
             )
         else:
             # Multi-line block: show available content around the first line
@@ -65,10 +66,10 @@ async def edit_file(ctx: RunContext, path: str, old: str, new: str) -> str:
                 if similar:
                     lineno, match = similar[0]
                     hint = f"\nFirst line not found. Did you mean line {lineno + 1}: {match[:120]}?"
-            return (
-                f"ERROR: Multi-line text not found in {path}.\n"
+            raise ValueError(
+                f"Multi-line text not found in {path}.\n"
                 f"First line: {first_line[:80]}{hint}\n"
-                f"Hint: read the file first and use the exact block to replace."
+                "Hint: read the file first and use the exact block to replace."
             )
 
     await ctx.env.edit(path, old, new)
@@ -104,7 +105,7 @@ async def insert_before(ctx: RunContext, path: str, target: str, content: str) -
     try:
         text = await ctx.read(path)
     except FileNotFoundError:
-        return f"ERROR: File not found: {path}"
+        raise FileNotFoundError(f"File not found: {path}") from None
 
     lines = text.splitlines(keepends=True)
     for i, line in enumerate(lines):
@@ -117,9 +118,9 @@ async def insert_before(ctx: RunContext, path: str, target: str, content: str) -
             return f"Inserted {len(content)} chars before line {i + 1} in {path}"
 
     # Target not found — give actionable error
-    return (
-        f"ERROR: Target text not found in {path}: {target[:100]}\n"
-        f"Hint: read the file first and verify the target line exists."
+    raise ValueError(
+        f"Target text not found in {path}: {target[:100]}\n"
+        "Hint: read the file first and verify the target line exists."
     )
 
 
@@ -133,7 +134,7 @@ async def insert_after(ctx: RunContext, path: str, target: str, content: str) ->
     try:
         text = await ctx.read(path)
     except FileNotFoundError:
-        return f"ERROR: File not found: {path}"
+        raise FileNotFoundError(f"File not found: {path}") from None
 
     lines = text.splitlines(keepends=True)
     for i, line in enumerate(lines):
@@ -146,9 +147,9 @@ async def insert_after(ctx: RunContext, path: str, target: str, content: str) ->
             return f"Inserted {len(content)} chars after line {i + 1} in {path}"
 
     # Target not found — give actionable error
-    return (
-        f"ERROR: Target text not found in {path}: {target[:100]}\n"
-        f"Hint: read the file first and verify the target line exists."
+    raise ValueError(
+        f"Target text not found in {path}: {target[:100]}\n"
+        "Hint: read the file first and verify the target line exists."
     )
 
 
@@ -161,7 +162,7 @@ async def replace_regex(ctx: RunContext, path: str, pattern: str, replacement: s
     try:
         text = await ctx.read(path)
     except FileNotFoundError:
-        return f"ERROR: File not found: {path}"
+        raise FileNotFoundError(f"File not found: {path}") from None
 
     try:
         if replace_all:
@@ -169,12 +170,12 @@ async def replace_regex(ctx: RunContext, path: str, pattern: str, replacement: s
         else:
             new_text, count = re.subn(pattern, replacement, text, count=1)
     except re.error as e:
-        return f"ERROR: Invalid regex pattern: {e}"
+        raise ValueError(f"Invalid regex pattern: {e}") from e
 
     if count == 0:
-        return (
-            f"ERROR: Pattern '{pattern}' matched 0 occurrences in {path}.\n"
-            f"Hint: read the file first and verify the pattern matches."
+        raise ValueError(
+            f"Pattern '{pattern}' matched 0 occurrences in {path}.\n"
+            "Hint: read the file first and verify the pattern matches."
         )
 
     await ctx.write(path, new_text)
@@ -191,7 +192,8 @@ async def file_exists(ctx: RunContext, path: str) -> str:
 @tool(description="Search file contents with a regex pattern")
 async def grep(ctx: RunContext, pattern: str, path: str = ".", recursive: bool = True) -> str:
     flag = "-r" if recursive else ""
-    result = await ctx.exec(f"grep -n {flag} '{pattern}' {path} 2>/dev/null || true")
+    cmd = f"grep -n {flag} {shlex.quote(pattern)} {shlex.quote(path)} 2>/dev/null || true".strip()
+    result = await ctx.exec(cmd)
     return result.stdout
 
 
@@ -212,7 +214,7 @@ async def list_dir(ctx: RunContext, path: str = ".", max_depth: int = 1) -> str:
         max_depth = 3
     # Use find for depth-limited listing with type indicators
     result = await ctx.exec(
-        f"find {path} -maxdepth {max_depth} -not -path '*/\\.*' "
+        f"find {shlex.quote(path)} -maxdepth {max_depth} -not -path '*/\\.*' "
         f"| sort"
     )
     return result.stdout
