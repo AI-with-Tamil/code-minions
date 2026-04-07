@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from minion import Blueprint, Minion, Task
-from minion.models._base import ModelResponse, ToolCall
-from minion.testing import MockEnvironment, MockModel, run_blueprint_test
+from codeminions import Blueprint, Minion, Task
+from codeminions.models._base import ModelResponse, ToolCall
+from codeminions.testing import MockEnvironment, MockModel, run_blueprint_test
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,15 +26,17 @@ def _blueprints_from(namespace: dict[str, object]) -> list[Blueprint]:
 
 def test_public_examples_compile_and_validate() -> None:
     for filename in [
-        "01_stripe_pattern.py",
-        "02_spotify_judge.py",
-        "03_airbnb_migration.py",
-        "04_linkedin_spec.py",
-        "05_anthropic_two_agent.py",
-        "06_ramp_docker.py",
-        "07_coinbase_council.py",
-        "08_real_llm_smoke.py",
-        "09_real_repo_config_resolution.py",
+        "research/01_stripe_pattern.py",
+        "research/02_spotify_judge.py",
+        "research/03_repository_migration.py",
+        "research/04_linkedin_spec.py",
+        "research/05_anthropic_two_agent.py",
+        "research/06_ramp_docker.py",
+        "research/07_coinbase_council.py",
+        "validation/08_real_llm_smoke.py",
+        "validation/09_real_repo_config_resolution.py",
+        "real/01_self_hosted_single_task.py",
+        "real/02_self_hosted_task_queue.py",
     ]:
         namespace = _load_example(filename)
         blueprints = _blueprints_from(namespace)
@@ -45,29 +47,29 @@ def test_public_examples_compile_and_validate() -> None:
 
 def test_minion_config_resolution_order(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
-        "[tool.minion]\n"
+        "[tool.codeminions]\n"
         'model = "from-pyproject"\n'
         'blueprint = "from-pyproject"\n'
         'environment = "from-pyproject"\n',
         encoding="utf-8",
     )
-    (tmp_path / "minion.toml").write_text(
-        "[minion]\n"
-        'model = "from-minion"\n'
-        'blueprint = "from-minion"\n'
-        'environment = "from-minion"\n',
+    (tmp_path / "codeminions.toml").write_text(
+        "[codeminions]\n"
+        'model = "from-codeminions"\n'
+        'blueprint = "from-codeminions"\n'
+        'environment = "from-codeminions"\n',
         encoding="utf-8",
     )
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("MINION_MODEL", "from-env")
-    monkeypatch.setenv("MINION_BLUEPRINT", "from-env")
-    monkeypatch.setenv("MINION_ENVIRONMENT", "from-env")
+    monkeypatch.setenv("CODEMINIONS_MODEL", "from-env")
+    monkeypatch.setenv("CODEMINIONS_BLUEPRINT", "from-env")
+    monkeypatch.setenv("CODEMINIONS_ENVIRONMENT", "from-env")
 
     defaulted = Minion()
-    assert defaulted._model_spec == "from-minion"
-    assert defaulted._blueprint_spec == "from-minion"
-    assert defaulted._environment_spec == "from-minion"
+    assert defaulted._model_spec == "from-codeminions"
+    assert defaulted._blueprint_spec == "from-codeminions"
+    assert defaulted._environment_spec == "from-codeminions"
 
     overridden = Minion(
         model="from-constructor",
@@ -81,7 +83,7 @@ def test_minion_config_resolution_order(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
 @pytest.mark.asyncio
 async def test_example_02_spotify_judge_retry_contract() -> None:
-    ns = _load_example("02_spotify_judge.py")
+    ns = _load_example("research/02_spotify_judge.py")
     blueprint = ns["spotify_blueprint"]
 
     result = await run_blueprint_test(
@@ -111,13 +113,13 @@ async def test_example_02_spotify_judge_retry_contract() -> None:
 
 
 @pytest.mark.asyncio
-async def test_example_03_airbnb_loop_contract() -> None:
-    ns = _load_example("03_airbnb_migration.py")
+async def test_example_03_repository_migration_loop_contract() -> None:
+    ns = _load_example("research/03_repository_migration.py")
     blueprint = ns["migration_blueprint"]
 
     result = await run_blueprint_test(
         blueprint=blueprint,
-        task="Migrate all Enzyme tests to React Testing Library",
+        task="Migrate all legacy tests to the modern supported test style",
         model=MockModel(
             responses=[
                 ModelResponse(tool_calls=[ToolCall("done", {"summary": "Migrated first file", "files_changed": ["tests/a_test.py"]})]),
@@ -126,7 +128,7 @@ async def test_example_03_airbnb_loop_contract() -> None:
         ),
         env=MockEnvironment(
             exec_results={
-                "rg -l 'Enzyme\\|shallow\\|mount' tests/": "tests/a_test.py\ntests/b_test.py\n",
+                "rg -l 'LegacyTestCase\\|legacy_assert' tests/": "tests/a_test.py\ntests/b_test.py\n",
                 "pytest tests/a_test.py --tb=short -q": 0,
                 "pytest tests/b_test.py --tb=short -q": 0,
             }
@@ -140,7 +142,7 @@ async def test_example_03_airbnb_loop_contract() -> None:
 
 @pytest.mark.asyncio
 async def test_example_04_linkedin_spec_contract() -> None:
-    ns = _load_example("04_linkedin_spec.py")
+    ns = _load_example("research/04_linkedin_spec.py")
     blueprint = ns["spec_blueprint"]
 
     task = Task(
@@ -174,7 +176,7 @@ async def test_example_04_linkedin_spec_contract() -> None:
 
 @pytest.mark.asyncio
 async def test_example_05_two_agent_handoff_contract() -> None:
-    ns = _load_example("05_anthropic_two_agent.py")
+    ns = _load_example("research/05_anthropic_two_agent.py")
     blueprint = ns["two_agent_blueprint"]
     progress_file = ns["PROGRESS_FILE"]
 
@@ -220,7 +222,7 @@ async def test_example_05_two_agent_handoff_contract() -> None:
 
 @pytest.mark.asyncio
 async def test_example_06_ramp_docker_contract() -> None:
-    ns = _load_example("06_ramp_docker.py")
+    ns = _load_example("research/06_ramp_docker.py")
     blueprint = ns["ramp_blueprint"]
 
     result = await run_blueprint_test(
@@ -251,7 +253,7 @@ async def test_example_06_ramp_docker_contract() -> None:
 
 @pytest.mark.asyncio
 async def test_example_07_coinbase_council_contract() -> None:
-    ns = _load_example("07_coinbase_council.py")
+    ns = _load_example("research/07_coinbase_council.py")
     blueprint = ns["council_blueprint"]
 
     result = await run_blueprint_test(
@@ -278,3 +280,102 @@ async def test_example_07_coinbase_council_contract() -> None:
     assert result.state.council_passed is True
     result.assert_node_skipped("fix_council_feedback")
     result.assert_node_skipped("fix_tests")
+
+
+@pytest.mark.asyncio
+async def test_example_09_repo_spec_happy_path() -> None:
+    ns = _load_example("validation/09_real_repo_config_resolution.py")
+    blueprint = ns["repo_spec_blueprint"]
+
+    task = Task(
+        description="Implement config resolution",
+        acceptance="uv run pytest -q tests/test_core.py -k ConfigurationResolution",
+    )
+
+    result = await run_blueprint_test(
+        blueprint=blueprint,
+        task=task,
+        model=MockModel(
+            responses=[
+                ModelResponse(
+                    tool_calls=[
+                        ToolCall(
+                            "done",
+                            {
+                                "summary": "Implemented config resolution",
+                                "files_changed": ["src/codeminions/core/minion.py"],
+                            },
+                        )
+                    ]
+                ),
+            ]
+        ),
+        env=MockEnvironment(
+            exec_results={
+                "git branch --show-current": "codeminions-real-abc123",
+                "uv run pytest -q tests/test_core.py -k ConfigurationResolution": 0,
+            }
+        ),
+    )
+
+    result.assert_passed()
+    assert result.state.acceptance_passed is True
+    result.assert_node_ran("implement")
+    result.assert_node_ran("verify")
+    result.assert_node_skipped("fix_acceptance")
+    result.assert_tool_called("done")
+
+
+@pytest.mark.asyncio
+async def test_example_09_repo_spec_fix_acceptance_path() -> None:
+    """When verify fails, fix_acceptance node runs and completes the workflow."""
+    ns = _load_example("validation/09_real_repo_config_resolution.py")
+    blueprint = ns["repo_spec_blueprint"]
+
+    task = Task(
+        description="Implement config resolution",
+        acceptance="uv run pytest -q tests/test_core.py -k ConfigurationResolution",
+    )
+
+    result = await run_blueprint_test(
+        blueprint=blueprint,
+        task=task,
+        model=MockModel(
+            responses=[
+                # implement node
+                ModelResponse(
+                    tool_calls=[
+                        ToolCall(
+                            "done",
+                            {
+                                "summary": "Partial implementation",
+                                "files_changed": ["src/codeminions/core/minion.py"],
+                            },
+                        )
+                    ]
+                ),
+                # fix_acceptance node (runs because acceptance_passed is False)
+                ModelResponse(
+                    tool_calls=[
+                        ToolCall(
+                            "done",
+                            {
+                                "summary": "Fixed config resolution",
+                                "files_changed": ["src/codeminions/core/minion.py"],
+                            },
+                        )
+                    ]
+                ),
+            ]
+        ),
+        env=MockEnvironment(
+            exec_results={
+                "git branch --show-current": "codeminions-real-abc123",
+                # acceptance command fails → acceptance_passed = False → fix_acceptance runs
+                "uv run pytest -q tests/test_core.py -k ConfigurationResolution": 1,
+            }
+        ),
+    )
+
+    result.assert_passed()
+    result.assert_node_ran("fix_acceptance")

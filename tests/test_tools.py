@@ -2,17 +2,17 @@
 
 import pytest
 
-from minion.testing import MockEnvironment, MockModel
-from minion.tools.code import (
+from codeminions.testing import MockEnvironment, MockModel
+from codeminions.tools.code import (
     append_file, edit_file, file_exists, insert_after,
     insert_before, read_file, replace_regex,
 )
-from minion.tools.search import find_files, search_files
-from minion.tools.shell import (
+from codeminions.tools.search import find_files, search_files
+from codeminions.tools.shell import (
     git_checkout, git_create_branch, git_push,
     git_show, pwd,
 )
-from minion.tools.ci import summarize_failure_output
+from codeminions.tools.ci import summarize_failure_output
 from pydantic import BaseModel
 
 
@@ -25,9 +25,9 @@ class ToolState(BaseModel):
 
 def _make_ctx(env=None, state=None):
     """Build a minimal RunContext for direct tool testing."""
-    from minion.core.context import RunConfig, RunContext
-    from minion.core.task import Task
-    from minion.trace import Trace
+    from codeminions.core.context import RunConfig, RunContext
+    from codeminions.core.task import Task
+    from codeminions.trace import Trace
 
     return RunContext(
         env=env or MockEnvironment(),
@@ -333,10 +333,10 @@ class TestGitCreateBranch:
     @pytest.mark.asyncio
     async def test_create_branch(self):
         env = MockEnvironment(exec_results={
-            "git checkout -b minion/abc123": "Switched to a new branch 'minion/abc123'\n",
+            "git checkout -b codeminions/abc123": "Switched to a new branch 'codeminions/abc123'\n",
         })
         ctx = _make_ctx(env=env)
-        result = await git_create_branch.execute(ctx, branch="minion/abc123")
+        result = await git_create_branch.execute(ctx, branch="codeminions/abc123")
         assert "new branch" in result.content
 
     @pytest.mark.asyncio
@@ -435,7 +435,7 @@ class TestSummarizeFailureOutput:
 
 class TestToolSubsets:
     def test_code_tools_has_all_new_tools(self):
-        from minion.tools import CODE_TOOLS
+        from codeminions.tools import CODE_TOOLS
         names = {t.name for t in CODE_TOOLS}
         for name in [
             "read_file", "write_file", "edit_file", "append_file",
@@ -445,7 +445,7 @@ class TestToolSubsets:
             assert name in names, f"CODE_TOOLS missing {name}"
 
     def test_shell_tools_has_all_new_tools(self):
-        from minion.tools import SHELL_TOOLS
+        from codeminions.tools import SHELL_TOOLS
         names = {t.name for t in SHELL_TOOLS}
         for name in [
             "run_command", "pwd",
@@ -456,17 +456,17 @@ class TestToolSubsets:
             assert name in names, f"SHELL_TOOLS missing {name}"
 
     def test_ci_tools_has_summarize_failure(self):
-        from minion.tools import CI_TOOLS
+        from codeminions.tools import CI_TOOLS
         names = {t.name for t in CI_TOOLS}
         assert "summarize_failure_output" in names
 
     def test_search_tools_exists(self):
-        from minion.tools import SEARCH_TOOLS
+        from codeminions.tools import SEARCH_TOOLS
         names = {t.name for t in SEARCH_TOOLS}
         assert "find_files" in names
         assert "search_files" in names
         assert len(SEARCH_TOOLS) == 2
 
     def test_public_api_exports_search_tools(self):
-        from minion.tools import SEARCH_TOOLS
+        from codeminions.tools import SEARCH_TOOLS
         assert len(SEARCH_TOOLS) == 2

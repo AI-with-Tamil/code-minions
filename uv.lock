@@ -543,7 +543,7 @@ wheels = [
 ]
 
 [[package]]
-name = "minion-sdk"
+name = "code-minions"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

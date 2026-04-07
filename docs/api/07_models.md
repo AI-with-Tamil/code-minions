@@ -22,7 +22,7 @@ Any object implementing this works as a model.
 ## ClaudeModel
 
 ```python
-from minion.models import ClaudeModel
+from codeminions.models import ClaudeModel
 
 ClaudeModel(
     model:       str = "claude-sonnet-4-6",
@@ -45,7 +45,7 @@ Minion(model="claude-haiku-4-5")
 ## OpenAIModel
 
 ```python
-from minion.models import OpenAIModel
+from codeminions.models import OpenAIModel
 
 OpenAIModel(
     model:       str = "gpt-4o",

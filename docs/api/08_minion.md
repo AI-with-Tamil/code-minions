@@ -5,7 +5,7 @@ The runner. Ties model, blueprint, and environment together. The entry point use
 ## Interface
 
 ```python
-from minion import Minion
+from codeminions import Minion
 
 Minion(
     model:          str | BaseModelProtocol = "claude-sonnet-4-6",
@@ -37,7 +37,7 @@ results: list[RunResult] = await minion.run_batch(tasks: list[str | Task])
 ## Event hooks
 
 ```python
-from minion import MinionEvent
+from codeminions import MinionEvent
 
 @minion.on(MinionEvent.NODE_START)
 async def on_node_start(event: NodeStartEvent) -> None:
@@ -60,17 +60,17 @@ result = await Minion().run("Fix the null check in auth.py")
 
 # Resolution order:
 # 1. Constructor args
-# 2. minion.toml
-# 3. pyproject.toml [tool.minion]
-# 4. Environment variables (MINION_MODEL, MINION_BLUEPRINT, etc.)
+# 2. codeminions.toml
+# 3. pyproject.toml [tool.codeminions]
+# 4. Environment variables (CODEMINIONS_MODEL, CODEMINIONS_BLUEPRINT, etc.)
 # 5. SDK defaults: claude-sonnet-4-6, coding blueprint, LocalEnv(".")
 ```
 
 ## Configuration file
 
 ```toml
-# minion.toml or pyproject.toml [tool.minion]
-[minion]
+# codeminions.toml or pyproject.toml [tool.codeminions]
+[codeminions]
 model       = "claude-sonnet-4-6"
 blueprint   = "coding"
 environment = "docker"

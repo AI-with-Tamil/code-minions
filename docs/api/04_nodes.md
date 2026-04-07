@@ -9,7 +9,7 @@ A node is one step in a Blueprint. Each node has a name, an optional condition, 
 Pure Python. No LLM. Always runs the same way.
 
 ```python
-from minion import DeterministicNode
+from codeminions import DeterministicNode
 
 DeterministicNode(
     name:       str,
@@ -40,7 +40,7 @@ DeterministicNode("push",          fn=push_branch, on_failure="abort")
 LLM loop with tool calling. Runs until `done()` is called or budget exhausted.
 
 ```python
-from minion import AgentNode
+from codeminions import AgentNode
 
 AgentNode(
     name:            str,
@@ -92,7 +92,7 @@ A second LLM that evaluates the output of a prior AgentNode.
 Vetoes bad output and re-enters the target node.
 
 ```python
-from minion import JudgeNode
+from codeminions import JudgeNode
 
 JudgeNode(
     name:       str,
@@ -137,7 +137,7 @@ JudgeNode(
 Runs multiple child nodes concurrently. Merges state on completion.
 
 ```python
-from minion import ParallelNode
+from codeminions import ParallelNode
 
 ParallelNode(
     name:       str,
@@ -174,7 +174,7 @@ Iterates a reusable sub-blueprint over a discovered list of targets.
 Use this for migration and codemod workflows where each item follows the same bounded process.
 
 ```python
-from minion import LoopNode
+from codeminions import LoopNode
 
 LoopNode(
     name:           str,

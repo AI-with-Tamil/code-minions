@@ -5,7 +5,7 @@ The structured input to a Minion run. Not just a string.
 ## Interface
 
 ```python
-from minion import Task
+from codeminions import Task
 
 class Task:
     description: str                    # what to do (required)

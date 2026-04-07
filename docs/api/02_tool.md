@@ -5,7 +5,7 @@ A typed, decorated Python function the LLM agent can call.
 ## Interface
 
 ```python
-from minion import tool, RunContext
+from codeminions import tool, RunContext
 
 @tool(description: str = "", output_policy: ToolOutputPolicy = default_policy)
 async def my_tool(ctx: RunContext, param: str, flag: bool = False) -> str:
@@ -82,7 +82,7 @@ class ToolResult:
 ## Built-in tool subsets
 
 ```python
-from minion.tools import CODE_TOOLS, SHELL_TOOLS, CI_TOOLS, WEB_TOOLS, PROGRESS_TOOLS
+from codeminions.tools import CODE_TOOLS, SHELL_TOOLS, CI_TOOLS, WEB_TOOLS, PROGRESS_TOOLS
 
 CODE_TOOLS      # read_file, write_file, edit_file, grep, glob, list_dir
 SHELL_TOOLS     # run_command, git_diff, git_log, git_status, git_add, git_commit, diff_history
@@ -141,7 +141,7 @@ For production web search, prefer an MCP search server (Brave, Google) for struc
 ## MCP tools
 
 ```python
-from minion.tools import (
+from codeminions.tools import (
     MCPClient,
     MCPServerConfig,
     complete_mcp_prompt,
@@ -210,4 +210,168 @@ Advanced path:
 Named server resolution order:
 - explicit keyword overrides passed to `mcp_tools(...)`
 - `register_mcp_server(...)`
-- environment variables like `MINION_MCP_GITHUB_COMMAND` or `MINION_MCP_GITHUB_URL`
+- environment variables like `CODEMINIONS_MCP_GITHUB_COMMAND` or `CODEMINIONS_MCP_GITHUB_URL`
+
+---
+
+## MCP in practice
+
+### Stdio server (local subprocess)
+
+Stdio is the primary transport for local MCP servers. The server process is spawned per-session.
+
+```python
+from codeminions import AgentNode, Blueprint, Minion
+from codeminions.tools import CODE_TOOLS, mcp_tools, register_mcp_server, MCPServerConfig
+
+# Register once at startup (typically in your harness entrypoint)
+register_mcp_server(
+    "github",
+    MCPServerConfig(
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-github"],
+        env={"GITHUB_TOKEN": "ghp_..."},   # inject credentials
+    ),
+)
+
+# Load tools — curated subset keeps the model's tool list short
+github_tools = mcp_tools("github", tools=["create_pull_request", "get_issue", "search_code"])
+
+node = AgentNode(
+    "ship",
+    system_prompt="Implement the task and open a PR when done.",
+    tools=[*CODE_TOOLS, *github_tools],
+)
+```
+
+The `command` + `args` run the MCP server process. `env` injects credentials into the subprocess environment without leaking them into the agent's context.
+
+---
+
+### HTTP server (remote / cloud)
+
+`streamable_http` is the current standard for remote MCP servers.
+
+```python
+register_mcp_server(
+    "linear",
+    MCPServerConfig(
+        transport="streamable_http",
+        url="https://mcp.linear.app/mcp",
+        headers={"Authorization": f"Bearer {os.environ['LINEAR_API_KEY']}"},
+        timeout_seconds=30,
+    ),
+)
+
+linear_tools = mcp_tools("linear", tools=["create_issue", "update_issue", "search_issues"])
+```
+
+`sse` transport works the same way — swap `transport="streamable_http"` for `transport="sse"` for legacy servers.
+
+---
+
+### Environment variable configuration
+
+You can configure MCP servers without calling `register_mcp_server` by setting environment variables. This is useful for teams that configure servers at the deployment layer.
+
+**Stdio server** (e.g. GitHub):
+```
+CODEMINIONS_MCP_GITHUB_COMMAND=npx
+CODEMINIONS_MCP_GITHUB_ARGS=-y,@modelcontextprotocol/server-github
+CODEMINIONS_MCP_GITHUB_ENV_GITHUB_TOKEN=ghp_...
+```
+
+**HTTP server** (e.g. Linear):
+```
+CODEMINIONS_MCP_LINEAR_URL=https://mcp.linear.app/mcp
+CODEMINIONS_MCP_LINEAR_HEADERS_AUTHORIZATION=Bearer lin_api_...
+```
+
+With either approach, `mcp_tools("github")` resolves the server config automatically — no `register_mcp_server` call needed in code.
+
+---
+
+### Combining MCP tools with built-in subsets
+
+MCP tools are plain `Tool` instances — pass them alongside built-in subsets:
+
+```python
+from codeminions.tools import CODE_TOOLS, SHELL_TOOLS, mcp_tools
+
+register_mcp_server("brave", MCPServerConfig(
+    transport="stdio",
+    command="npx",
+    args=["-y", "@modelcontextprotocol/server-brave-search"],
+    env={"BRAVE_API_KEY": "..."},
+))
+
+coding_node = AgentNode(
+    "implement",
+    system_prompt="Implement the task. Use brave_web_search to look up APIs.",
+    tools=[
+        *CODE_TOOLS,
+        *SHELL_TOOLS,
+        *mcp_tools("brave", tools=["brave_web_search"]),
+    ],
+)
+```
+
+Keep the tool list curated: fewer tools = tighter context = more reliable agent behavior.
+
+---
+
+### Reading MCP resources
+
+Resources are read-only URIs exposed by the server (docs, schemas, repo files):
+
+```python
+from codeminions.tools import list_mcp_resources, read_mcp_resource
+
+resources = await list_mcp_resources("github")
+# [{"uri": "repo://README.md", "name": "README", ...}, ...]
+
+readme = await read_mcp_resource("github", "repo://README.md")
+```
+
+Pass resource content as context in a `Task`:
+
+```python
+task = Task(
+    description="Add rate limiting to the API",
+    context=[await read_mcp_resource("github", "repo://src/api.py")],
+)
+```
+
+---
+
+### Using MCP prompts
+
+Prompts are reusable templates the server exposes:
+
+```python
+from codeminions.tools import list_mcp_prompts, get_mcp_prompt
+
+prompts = await list_mcp_prompts("github")
+# [{"name": "review_pr", "description": "Review a pull request", ...}]
+
+review_text = await get_mcp_prompt("github", "review_pr", {"pr_number": "123"})
+```
+
+---
+
+### Direct MCPClient access
+
+For advanced use cases — streaming, ping, or server capability inspection:
+
+```python
+from codeminions.tools import MCPClient, MCPServerConfig
+
+async with MCPClient(MCPServerConfig(transport="stdio", command="npx", args=[...])) as client:
+    tools = await client.list_tools()
+    result = await client.call_tool("create_pull_request", {"title": "fix: ...", "body": "..."})
+    resources = await client.list_resources()
+    await client.send_ping()
+```
+
+`MCPClient` is a context manager — it manages the session lifecycle and closes the connection on exit.

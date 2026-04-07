@@ -6,7 +6,7 @@ Not a graph. Sequence with conditional skipping.
 ## Interface
 
 ```python
-from minion import Blueprint
+from codeminions import Blueprint
 from pydantic import BaseModel
 
 Blueprint(
@@ -109,7 +109,7 @@ headless = coding_blueprint.without("push")
 ## Built-in blueprints
 
 ```python
-from minion.blueprints import coding_blueprint
+from codeminions.blueprints import coding_blueprint
 
 # coding_blueprint nodes:
 # create_branch → gather_context → implement → lint → fix_lint? →

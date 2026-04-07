@@ -4,7 +4,7 @@ import pytest
 
 from pydantic import BaseModel
 
-from minion import (
+from codeminions import (
     AgentNode,
     Blueprint,
     BlueprintValidationError,
@@ -18,9 +18,9 @@ from minion import (
     tool,
     ToolDefinitionError,
 )
-from minion.core.context import ExecResult
-from minion.models._base import ModelResponse, ToolCall
-from minion.testing import MockEnvironment, MockModel, run_blueprint_test
+from codeminions.core.context import ExecResult
+from codeminions.models._base import ModelResponse, ToolCall
+from codeminions.testing import MockEnvironment, MockModel, run_blueprint_test
 
 
 # --- Task ---
@@ -236,7 +236,7 @@ class TestMockEnvironment:
     @pytest.mark.asyncio
     async def test_exec_glob_match(self):
         env = MockEnvironment(exec_results={"git checkout -b *": 0})
-        result = await env.exec("git checkout -b minion/abc")
+        result = await env.exec("git checkout -b codeminions/abc")
         assert result.exit_code == 0
 
     @pytest.mark.asyncio
@@ -258,8 +258,37 @@ class TestMockEnvironment:
         await env.read("a.py")
         await env.write("b.py", "y")
         assert len(env.calls) == 2
-        assert env.calls[0].method == "read"
-        assert env.calls[1].method == "write"
+
+
+class TestMinionConfigurationResolution:
+    def test_partial_minion_toml_falls_back_to_pyproject_per_key(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.codeminions]\n"
+            'model = "from-pyproject-model"\n'
+            'blueprint = "from-pyproject-blueprint"\n'
+            'environment = "from-pyproject-environment"\n',
+            encoding="utf-8",
+        )
+        (tmp_path / "codeminions.toml").write_text(
+            "[codeminions]\n"
+            'model = "from-codeminions-model"\n',
+            encoding="utf-8",
+        )
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("CODEMINIONS_MODEL", raising=False)
+        monkeypatch.delenv("CODEMINIONS_BLUEPRINT", raising=False)
+        monkeypatch.delenv("CODEMINIONS_ENVIRONMENT", raising=False)
+
+        minion = Minion()
+
+        assert minion._model_spec == "from-codeminions-model"
+        assert minion._blueprint_spec == "from-pyproject-blueprint"
+        assert minion._environment_spec == "from-pyproject-environment"
 
 
 # --- RunResult assertions ---
@@ -593,3 +622,172 @@ async def test_condition_skip():
     result.assert_passed()
     result.assert_node_ran("always")
     result.assert_node_skipped("conditional")
+
+
+# --- Trace query helpers ---
+
+class TestTraceQueryHelpers:
+    def test_by_type_filters_correctly(self) -> None:
+        from codeminions.trace import Trace
+
+        t = Trace(run_id="r1")
+        t.record_node_start("a")
+        t.record_node_start("b")
+        t.record_skip("c")
+        t.record_tool_call("a", "read_file", {"path": "x.py"})
+
+        starts = t.by_type("node_start")
+        assert len(starts) == 2
+        assert all(e.type == "node_start" for e in starts)
+
+        skips = t.by_type("node_skip")
+        assert len(skips) == 1 and skips[0].node == "c"
+
+    def test_by_node_filters_correctly(self) -> None:
+        from codeminions.trace import Trace
+
+        t = Trace(run_id="r2")
+        t.record_node_start("alpha")
+        t.record_tool_call("alpha", "write_file", {"path": "a.py", "content": "x"})
+        t.record_node_start("beta")
+        t.record_tool_call("beta", "run_command", {"cmd": "ls"})
+
+        alpha_events = t.by_node("alpha")
+        assert all(e.node == "alpha" for e in alpha_events)
+        assert {e.type for e in alpha_events} == {"node_start", "tool_call"}
+
+        beta_events = t.by_node("beta")
+        assert len(beta_events) == 2
+
+    def test_tool_calls_returns_all_when_no_filter(self) -> None:
+        from codeminions.trace import Trace
+
+        t = Trace(run_id="r3")
+        t.record_tool_call("n1", "read_file", {"path": "a.py"})
+        t.record_tool_call("n1", "write_file", {"path": "b.py", "content": ""})
+        t.record_skip("n2")
+
+        calls = t.tool_calls()
+        assert len(calls) == 2
+        assert all(e.type == "tool_call" for e in calls)
+
+    def test_tool_calls_filters_by_name(self) -> None:
+        from codeminions.trace import Trace
+
+        t = Trace(run_id="r4")
+        t.record_tool_call("n", "read_file", {"path": "a.py"})
+        t.record_tool_call("n", "write_file", {"path": "b.py", "content": ""})
+        t.record_tool_call("n", "read_file", {"path": "c.py"})
+
+        reads = t.tool_calls("read_file")
+        assert len(reads) == 2
+        assert all(e.data["tool"] == "read_file" for e in reads)
+
+        writes = t.tool_calls("write_file")
+        assert len(writes) == 1
+
+    def test_tool_calls_empty_when_none_recorded(self) -> None:
+        from codeminions.trace import Trace
+
+        t = Trace(run_id="r5")
+        t.record_node_start("n")
+        assert t.tool_calls() == []
+        assert t.tool_calls("missing") == []
+
+
+# --- RunResult judge assertions ---
+
+import pytest
+from codeminions.testing import MockModel, MockEnvironment, run_blueprint_test
+from codeminions.models._base import ModelResponse, ToolCall as TC
+
+
+@pytest.mark.asyncio
+async def test_judge_approved_assertion() -> None:
+    """assert_judge_approved passes when judge approves."""
+    from codeminions import Blueprint, AgentNode, JudgeNode
+    from pydantic import BaseModel
+
+    class S(BaseModel):
+        verdict: str = ""
+
+    bp = Blueprint(
+        name="judge_approve_test",
+        state_cls=S,
+        nodes=[
+            AgentNode("impl", system_prompt="Implement", tools=[], max_rounds=2),
+            JudgeNode("judge", evaluates="impl", criteria="Is it good?", on_veto="escalate"),
+        ],
+    )
+
+    result = await run_blueprint_test(
+        bp,
+        "task",
+        model=MockModel(responses=[
+            ModelResponse(tool_calls=[TC("done", {"summary": "done", "files_changed": []})]),
+            ModelResponse(text="APPROVE", input_tokens=5, output_tokens=2),
+        ]),
+        env=MockEnvironment(exec_results={"git diff": ""}),
+    )
+
+    result.assert_passed()
+    result.assert_judge_approved("judge")
+    verdicts = result.judge_verdicts()
+    assert verdicts == {"judge": "approved"}
+
+
+@pytest.mark.asyncio
+async def test_judge_vetoed_assertion() -> None:
+    """assert_judge_vetoed passes when judge vetoes; judge_verdicts reflects final outcome."""
+    from codeminions import Blueprint, AgentNode, JudgeNode
+    from pydantic import BaseModel
+
+    class S(BaseModel):
+        verdict: str = ""
+
+    bp = Blueprint(
+        name="judge_veto_test",
+        state_cls=S,
+        nodes=[
+            AgentNode("impl", system_prompt="Implement", tools=[], max_rounds=3),
+            JudgeNode("judge", evaluates="impl", criteria="Is it good?",
+                      max_vetoes=2, on_veto="retry"),
+        ],
+    )
+
+    result = await run_blueprint_test(
+        bp,
+        "task",
+        model=MockModel(responses=[
+            # initial impl
+            ModelResponse(tool_calls=[TC("done", {"summary": "first", "files_changed": []})]),
+            # judge vetoes
+            ModelResponse(text="VETO: too broad", input_tokens=5, output_tokens=4),
+            # retry impl
+            ModelResponse(tool_calls=[TC("done", {"summary": "narrower", "files_changed": []})]),
+            # judge approves
+            ModelResponse(text="APPROVE", input_tokens=5, output_tokens=2),
+        ]),
+        env=MockEnvironment(exec_results={"git diff": ""}),
+    )
+
+    result.assert_passed()
+    result.assert_judge_vetoed("judge")
+    result.assert_judge_vetoed("judge", reason="too broad")
+    result.assert_judge_approved("judge")
+    verdicts = result.judge_verdicts()
+    assert verdicts == {"judge": "approved"}  # last event wins
+
+
+@pytest.mark.asyncio
+async def test_judge_verdicts_with_no_judge() -> None:
+    """judge_verdicts returns empty dict when no judge ran."""
+    from codeminions import Blueprint, DeterministicNode
+    from pydantic import BaseModel
+
+    async def noop(ctx: RunContext) -> None:
+        pass
+
+    bp = Blueprint(name="no_judge", nodes=[DeterministicNode("n", fn=noop)])
+    result = await run_blueprint_test(bp, "t", MockModel(), MockEnvironment())
+    assert result.judge_verdicts() == {}

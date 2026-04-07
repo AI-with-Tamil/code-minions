@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import socket
 import subprocess
@@ -12,9 +13,9 @@ import time
 import pytest
 from pydantic import BaseModel
 
-from minion import RunConfig, RunContext, Task
-from minion.testing import MockEnvironment, MockModel
-from minion.tools import (
+from codeminions import RunConfig, RunContext, Task
+from codeminions.testing import MockEnvironment, MockModel
+from codeminions.tools import (
     InMemoryTokenStorage,
     MCPClient,
     MCPServerConfig,
@@ -30,7 +31,12 @@ from minion.tools import (
     mcp_tools,
     read_mcp_resource,
 )
-from minion.trace import Trace
+from codeminions.trace import Trace
+
+pytestmark = pytest.mark.skipif(
+    importlib.util.find_spec("mcp") is None,
+    reason="optional 'mcp' dependency is not installed",
+)
 
 
 class _State(BaseModel):
@@ -107,7 +113,7 @@ import os
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 
-port = int(os.environ["MINION_TEST_MCP_PORT"])
+port = int(os.environ["CODEMINIONS_TEST_MCP_PORT"])
 mcp = FastMCP("http-test-server", host="127.0.0.1", port=port)
 
 @mcp.tool()
@@ -261,8 +267,8 @@ async def test_mcp_client_lists_tools_resources_and_prompts(tmp_path):
 
 def test_mcp_tools_resolve_named_server_from_env(tmp_path, monkeypatch):
     server_script = _write_stdio_server(tmp_path)
-    monkeypatch.setenv("MINION_MCP_TEST_SERVER_COMMAND", sys.executable)
-    monkeypatch.setenv("MINION_MCP_TEST_SERVER_ARGS", json.dumps([server_script]))
+    monkeypatch.setenv("CODEMINIONS_MCP_TEST_SERVER_COMMAND", sys.executable)
+    monkeypatch.setenv("CODEMINIONS_MCP_TEST_SERVER_ARGS", json.dumps([server_script]))
 
     tools = mcp_tools("test-server", tools=["echo"])
     assert [tool.name for tool in tools] == ["echo"]
@@ -301,7 +307,7 @@ async def test_streamable_http_mcp_client_round_trip(tmp_path):
     server_script = _write_streamable_http_server(tmp_path)
     port = _free_port()
     env = dict(os.environ)
-    env["MINION_TEST_MCP_PORT"] = str(port)
+    env["CODEMINIONS_TEST_MCP_PORT"] = str(port)
     proc = subprocess.Popen(
         [sys.executable, server_script],
         env=env,

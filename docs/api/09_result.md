@@ -5,7 +5,7 @@ The output of a Minion run.
 ## RunResult
 
 ```python
-from minion import RunResult
+from codeminions import RunResult
 
 @dataclass
 class RunResult:
@@ -26,7 +26,7 @@ Returned when a node exceeds `max_rounds` with `on_max_rounds="escalate"`,
 or when a node fails with `on_failure="escalate"`.
 
 ```python
-from minion import EscalationResult
+from codeminions import EscalationResult
 
 @dataclass
 class EscalationResult(RunResult):
@@ -80,6 +80,25 @@ result.assert_tokens_under(limit: int)
 result.assert_duration_under(ms: int)
 ```
 
+## Judge assertions
+
+For blueprints that include `JudgeNode`:
+
+```python
+result.assert_judge_approved(node: str)        # JudgeNode produced APPROVE
+result.assert_judge_vetoed(node: str, reason: str | None = None)  # at least one VETO
+verdicts = result.judge_verdicts()             # {node_name: "approved" | "vetoed: <reason>"}
+```
+
+`judge_verdicts()` returns the **last** verdict per judge node — if a node vetoed then retried to approval, it returns `"approved"`.
+
+```python
+result = await Minion(blueprint=spotify_blueprint).run(task)
+result.assert_judge_approved("judge")
+verdicts = result.judge_verdicts()
+# {"judge": "approved"}
+```
+
 ## Trace
 
 ```python
@@ -93,4 +112,51 @@ class TraceEvent(TypedDict):
     node:      str
     timestamp: float
     data:      dict                 # event-specific payload
+```
+
+### Event types
+
+| Type | When | Key data fields |
+|------|------|-----------------|
+| `node_start` | node begins | — |
+| `node_complete` | node finishes | `error` (if failed) |
+| `node_skip` | condition returned False | — |
+| `tool_call` | agent invokes a tool | `tool`, `args` |
+| `tool_result` | tool returns | `tool`, `result`, `error` |
+| `agent_done` | agent calls `done()` | `summary`, `files_changed` |
+| `judge_approve` | judge APPROVE | — |
+| `judge_veto` | judge VETO | `reason`, `veto_number` |
+| `agent_max_rounds` | rounds budget hit | `max_rounds`, `on_max_rounds` |
+| `log` | `ctx.log()` call | `message` |
+
+### Trace query helpers
+
+```python
+trace = result.trace
+
+# Filter by event type
+starts = trace.by_type("node_start")
+vetoes = trace.by_type("judge_veto")
+
+# Filter by node name
+implement_events = trace.by_node("implement")
+
+# All tool_call events, optionally filtered by tool name
+all_calls = trace.tool_calls()
+file_writes = trace.tool_calls("write_file")
+```
+
+### Reading trace events
+
+```python
+for e in result.trace.events:
+    print(e.type, e.node, e.timestamp, e.data)
+
+# Find all files written
+writes = result.trace.tool_calls("write_file")
+paths = [e.data["args"]["path"] for e in writes]
+
+# Check veto reasons
+for veto in result.trace.by_type("judge_veto"):
+    print(f"  veto #{veto.data['veto_number']}: {veto.data['reason']}")
 ```

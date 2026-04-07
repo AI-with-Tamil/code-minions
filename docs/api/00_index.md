@@ -1,4 +1,4 @@
-# Minion SDK — API Reference
+# CodeMinions — API Reference
 
 > These docs define the full public contract of the SDK.
 > Implementation must match these exactly.
@@ -7,7 +7,7 @@
 ## Public API surface
 
 ```python
-from minion import (
+from codeminions import (
     # Core
     Minion, Blueprint, Task,
     AgentNode, DeterministicNode, JudgeNode, ParallelNode, LoopNode,
@@ -29,8 +29,8 @@ from minion import (
     MinionEvent,
 )
 
-from minion.tools import mcp_tools
-from minion.testing import MockModel, MockEnvironment, run_blueprint_test
+from codeminions.tools import mcp_tools
+from codeminions.testing import MockModel, MockEnvironment, run_blueprint_test
 ```
 
 ## Documents

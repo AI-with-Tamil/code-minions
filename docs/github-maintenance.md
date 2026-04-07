@@ -19,7 +19,7 @@ If the repo has no clean Git history yet:
 ```bash
 git branch -M main
 git add .
-git commit -m "chore: initialize minion sdk baseline"
+git commit -m "chore: initialize code-minions baseline"
 git remote add origin <github-repo-url>
 git push -u origin main
 ```
@@ -63,7 +63,7 @@ Examples:
 - `docs: align v1 contract around LoopNode and DockerEnv`
 - `fix: enforce AgentNode max_rounds during judge retries`
 - `test: cover run_stream and diff capture behavior`
-- `build: export public API from minion package`
+- `build: export public API from codeminions package`
 
 Avoid vague commit messages like:
 
@@ -144,7 +144,7 @@ Before tagging:
 - tests pass
 - docs match implementation
 - examples still express the intended API cleanly
-- exported symbols in `src/minion/__init__.py` are intentional
+- exported symbols in `src/codeminions/__init__.py` are intentional
 
 ## Main Branch Rules
 
@@ -189,6 +189,6 @@ For this repo, contract order is:
 1. `AGENTS.md`
 2. `docs/api/`
 3. `examples/`
-4. implementation in `src/minion/`
+4. implementation in `src/codeminions/`
 
 If implementation disagrees with the contract, fix the implementation or explicitly update the contract.

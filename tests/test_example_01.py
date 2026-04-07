@@ -2,15 +2,15 @@
 
 import pytest
 
-from minion import (
+from codeminions import (
     AgentNode,
     Blueprint,
     DeterministicNode,
     RunContext,
 )
-from minion.tools import CODE_TOOLS, SHELL_TOOLS
-from minion.models._base import ModelResponse, ToolCall
-from minion.testing import MockEnvironment, MockModel, run_blueprint_test
+from codeminions.tools import CODE_TOOLS, SHELL_TOOLS
+from codeminions.models._base import ModelResponse, ToolCall
+from codeminions.testing import MockEnvironment, MockModel, run_blueprint_test
 from pydantic import BaseModel
 
 
@@ -27,7 +27,7 @@ class CodingState(BaseModel):
 
 
 async def create_branch(ctx: RunContext) -> None:
-    ctx.state.branch = f"minion/{ctx.run_id[:8]}"
+    ctx.state.branch = f"codeminions/{ctx.run_id[:8]}"
     await ctx.exec(f"git checkout -b {ctx.state.branch}")
 
 
@@ -61,7 +61,7 @@ async def push_branch(ctx: RunContext) -> None:
 async def create_pr(ctx: RunContext) -> None:
     result = await ctx.exec(
         f'gh pr create --title "minion: {ctx.task.description[:72]}" '
-        f'--body "Automated by Minion SDK\n\nTask: {ctx.task.description}" '
+        f'--body "Automated by CodeMinions\n\nTask: {ctx.task.description}" '
         f'--head {ctx.state.branch}'
     )
     ctx.state.pr_url = result.stdout.strip()
@@ -170,7 +170,7 @@ async def test_stripe_happy_path():
     result.assert_tool_called("read_file", path="src/signup.py")
     result.assert_tool_called("edit_file", path="src/signup.py")
 
-    assert result.state.branch.startswith("minion/")
+    assert result.state.branch.startswith("codeminions/")
     assert result.state.lint_failed is False
     assert result.state.tests_failed is False
     assert result.state.pr_url == "https://github.com/org/repo/pull/42"
@@ -222,7 +222,7 @@ async def test_stripe_lint_failure_triggers_fix():
 @pytest.mark.asyncio
 async def test_blueprint_validation():
     """Blueprint validates node names, judge references, etc."""
-    from minion import Blueprint, JudgeNode
+    from codeminions import Blueprint, JudgeNode
 
     bp = Blueprint(
         name="bad",
@@ -244,7 +244,7 @@ async def test_blueprint_composition():
     assert all(n.name != "create_pr" for n in no_pr.nodes)
 
     # before
-    from minion import DeterministicNode
+    from codeminions import DeterministicNode
     async def security_scan(ctx: RunContext) -> None:
         pass
     extended = bp.before("push", DeterministicNode("security_scan", fn=security_scan))
@@ -265,7 +265,7 @@ async def test_blueprint_composition():
 @pytest.mark.asyncio
 async def test_task_structured():
     """Task accepts structured input and string shorthand."""
-    from minion import Task
+    from codeminions import Task
 
     # Structured
     t = Task(
@@ -287,7 +287,7 @@ async def test_task_structured():
 @pytest.mark.asyncio
 async def test_tool_decorator():
     """@tool validates signatures and generates schemas."""
-    from minion import tool, RunContext
+    from codeminions import tool, RunContext
 
     @tool(description="Test tool")
     async def my_tool(ctx: RunContext, name: str, count: int = 5) -> str:

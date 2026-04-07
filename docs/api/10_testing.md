@@ -5,7 +5,7 @@ Test blueprints without real API calls. No network. No environment setup.
 ## Core function
 
 ```python
-from minion.testing import run_blueprint_test
+from codeminions.testing import run_blueprint_test
 
 result: RunResult = await run_blueprint_test(
     blueprint: Blueprint,
@@ -22,7 +22,7 @@ result: RunResult = await run_blueprint_test(
 Replays a scripted sequence of responses. No API calls.
 
 ```python
-from minion.testing import MockModel, ModelResponse, ToolCall
+from codeminions.testing import MockModel, ModelResponse, ToolCall
 
 mock = MockModel(
     responses=[
@@ -59,7 +59,7 @@ mock = MockModel(
 In-memory filesystem and command execution. No real files or processes.
 
 ```python
-from minion.testing import MockEnvironment
+from codeminions.testing import MockEnvironment
 
 env = MockEnvironment(
     files: dict[str, str] = {},          # path → content
@@ -77,7 +77,7 @@ env = MockEnvironment(
     exec_results={
         "ruff check . --fix":       0,          # exit code 0 = success
         "pytest tests/ -x --tb=short": 0,
-        "git checkout -b minion/abc123": 0,
+        "git checkout -b codeminions/abc123": 0,
         "git add -A":               0,
         "git commit -m ...":        0,           # glob match: "git commit -m *"
     },
@@ -98,8 +98,8 @@ env = MockEnvironment(
 ## Full example
 
 ```python
-from minion.blueprints import coding_blueprint
-from minion.testing import MockModel, MockEnvironment, ModelResponse, ToolCall, run_blueprint_test
+from codeminions.blueprints import coding_blueprint
+from codeminions.testing import MockModel, MockEnvironment, ModelResponse, ToolCall, run_blueprint_test
 
 async def test_coding_blueprint_happy_path():
     result = await run_blueprint_test(

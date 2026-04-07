@@ -1,5 +1,5 @@
 [project]
-name = "minion-sdk"
+name = "code-minions"
 version = "0.1.0"
 description = "Python SDK for building unattended agentic coding harnesses"
 readme = "README.md"
@@ -29,7 +29,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/minion"]
+packages = ["src/codeminions"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

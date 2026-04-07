@@ -6,7 +6,7 @@ Carries the environment, shared state, trace, model, config, and task.
 ## Interface
 
 ```python
-from minion import RunContext
+from codeminions import RunContext
 
 @dataclass
 class RunContext(Generic[EnvT]):
