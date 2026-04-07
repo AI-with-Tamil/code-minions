@@ -17,6 +17,56 @@ async def run_command(ctx: RunContext, command: str, cwd: str = "") -> str:
     return output
 
 
+@tool(description="Print the current working directory")
+async def pwd(ctx: RunContext) -> str:
+    result = await ctx.exec("pwd")
+    return result.stdout.strip()
+
+
+@tool(description="Show the contents of a specific git commit")
+async def git_show(ctx: RunContext, ref: str = "HEAD") -> str:
+    result = await ctx.exec(f"git show --stat {ref}")
+    return result.stdout
+
+
+@tool(description="Switch to a different git branch")
+async def git_checkout(ctx: RunContext, branch: str) -> str:
+    result = await ctx.exec(f"git checkout {branch}")
+    output = result.stdout
+    if result.stderr:
+        output += f"\n{result.stderr}"
+    if result.exit_code != 0:
+        output += f"\n[exit code: {result.exit_code}]"
+    return output
+
+
+@tool(description="Create a new git branch")
+async def git_create_branch(ctx: RunContext, branch: str, start_point: str = "") -> str:
+    cmd = f"git checkout -b {branch}"
+    if start_point:
+        cmd += f" {start_point}"
+    result = await ctx.exec(cmd)
+    output = result.stdout
+    if result.stderr:
+        output += f"\n{result.stderr}"
+    if result.exit_code != 0:
+        output += f"\n[exit code: {result.exit_code}]"
+    return output
+
+
+@tool(description="Push the current branch to the remote")
+async def git_push(ctx: RunContext, remote: str = "origin", set_upstream: bool = True, branch: str = "") -> str:
+    flag = "-u" if set_upstream else ""
+    target = branch or ""
+    result = await ctx.exec(f"git push {flag} {remote} {target}")
+    output = result.stdout
+    if result.stderr:
+        output += f"\n{result.stderr}"
+    if result.exit_code != 0:
+        output += f"\n[exit code: {result.exit_code}]"
+    return output
+
+
 @tool(description="Show git diff of current changes")
 async def git_diff(ctx: RunContext, staged: bool = False) -> str:
     flag = "--staged" if staged else ""

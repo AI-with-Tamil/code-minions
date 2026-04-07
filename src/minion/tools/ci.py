@@ -1,4 +1,4 @@
-"""Built-in CI tools: run_tests, run_linter, get_test_output."""
+"""Built-in CI tools: run_tests, run_linter, get_test_output, summarize_failure_output."""
 
 from __future__ import annotations
 
@@ -31,3 +31,50 @@ async def get_test_output(ctx: RunContext) -> str:
     if hasattr(state, "test_output"):
         return state.test_output
     return "(no test output recorded in state)"
+
+
+@tool(description="Summarize test or lint failure output into a concise, actionable report. Pass the raw failure text and get back file:line:error summaries.")
+async def summarize_failure_output(ctx: RunContext, failure_text: str, max_items: int = 20) -> str:
+    """Summarize test or lint failure output into a concise report.
+
+    Extracts file:line:error patterns from failure text.
+    Limits output to max_items to keep it focused for the agent.
+    """
+    if not failure_text.strip():
+        return "(empty failure input)"
+
+    lines = failure_text.strip().splitlines()
+
+    # Collect error/FAIL lines (file:line patterns, assert failures, error: lines)
+    errors = []
+    for line in lines:
+        stripped = line.strip()
+        # Match common patterns: file.py:NN:..., E/FAIL lines, assert errors
+        if any(pattern in stripped for pattern in [":", "E ", "FAILED", "ERROR", "assert", "Error:", "error:"]):
+            # Skip noise lines
+            if not any(skip in stripped for skip in [
+                "=== test session starts ===",
+                "=== short test summary info ===",
+                "=== FAILURES ===",
+                "collected",
+                "passed",
+                "warnings",
+            ]):
+                errors.append(stripped)
+
+    if not errors:
+        # Fall back to last 20 lines of the output
+        errors = lines[-max_items:]
+    else:
+        errors = errors[:max_items]
+
+    summary = [
+        f"Failure summary ({len(errors)} items):",
+        "---",
+    ]
+    for i, err in enumerate(errors, 1):
+        summary.append(f"{i}. {err[:200]}")
+    summary.append("---")
+    summary.append(f"\nOriginal output: {len(lines)} lines total.")
+
+    return "\n".join(summary)
