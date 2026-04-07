@@ -18,6 +18,7 @@ The live source of truth is:
 - [`docs/api/`](/Users/tamil/Developers/workflows/docs/api)
 - [GitHub maintenance guide](/Users/tamil/Developers/workflows/docs/github-maintenance.md)
 - [Real LLM run guide](/Users/tamil/Developers/workflows/docs/real-llm-run.md)
+- [Roadmap & reliability plan](docs/roadmap.md)
 
 If one of those disagrees with older design notes, the current contract wins.
 
@@ -45,3 +46,14 @@ If one of those disagrees with older design notes, the current contract wins.
 - public examples are backed by executable contract tests in `tests/test_examples_contracts.py`
 - MCP support now lives under `src/minion/tools/mcp/` as a package-level client subsystem
 - research and design references live under `design/`
+
+## Real validation
+
+Run `examples/09_real_repo_config_resolution.py` with your real model keys to validate the SDK:
+
+1. Populate `/Users/tamil/Developers/workflows/.env` with the Anthropic/OpenAI credentials, base URL overrides, and model aliases you need.
+2. Start Docker locally so `DockerEnv` can launch containers (`python:3.12` is the default image).
+3. Execute `uv run python examples/09_real_repo_config_resolution.py` from the repo root.
+4. Inspect the generated branch/diff and trace output to confirm `done()` was hit and acceptance criteria satisfied.
+
+The [roadmap](docs/roadmap.md) lays out how that workflow maps to our reliability goals.
