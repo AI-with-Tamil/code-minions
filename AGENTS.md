@@ -186,6 +186,9 @@ JudgeNode(
 )
 ```
 
+If `on_veto="retry"`, the target `AgentNode` must be re-enterable with `max_rounds >= 2`.
+That is a blueprint contract, not a prompt convention.
+
 ---
 
 ## MCP — First Class

@@ -126,6 +126,7 @@ JudgeNode(
 - Judge receives: task description, git diff, agent summary from `done()`
 - Judge returns: `approve` or `veto(reason: str)`
 - On veto + `on_veto="retry"`: re-enters the target AgentNode with the veto reason appended to system prompt
+- `on_veto="retry"` requires the target `AgentNode` to have `max_rounds >= 2`, otherwise blueprint validation fails
 - `max_vetoes` exhausted → applies `on_veto` policy (if "retry", escalates instead)
 - Spotify data: 25% veto rate, 50% self-correction rate after veto
 

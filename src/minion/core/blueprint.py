@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from pydantic import BaseModel
 
 from minion.core.node import (
     AgentNode,
     AnyNode,
-    DeterministicNode,
     JudgeNode,
     LoopNode,
     ParallelNode,
@@ -37,6 +35,7 @@ class Blueprint:
     def validate(self) -> None:
         """Validate the blueprint. Raises BlueprintValidationError with actionable messages."""
         issues: list[str] = []
+        agent_nodes = self._collect_agent_nodes()
 
         # Check node names unique
         names: dict[str, int] = {}
@@ -59,6 +58,14 @@ class Blueprint:
                         f"Node '{node.name}' (index {i}): JudgeNode.evaluates='{node.evaluates}' "
                         f"but no AgentNode named '{node.evaluates}' exists in this blueprint"
                     )
+                elif node.on_veto == "retry":
+                    target = agent_nodes.get(node.evaluates)
+                    if target is not None and target.max_rounds < 2:
+                        issues.append(
+                            f"Node '{node.name}' (index {i}): on_veto='retry' requires "
+                            f"AgentNode '{node.evaluates}' to have max_rounds >= 2, "
+                            f"got {target.max_rounds}"
+                        )
             elif isinstance(node, ParallelNode):
                 for child in node.nodes:
                     if isinstance(child, JudgeNode) and child.evaluates not in all_names:
@@ -67,6 +74,14 @@ class Blueprint:
                             f"JudgeNode.evaluates='{child.evaluates}' "
                             f"but no AgentNode named '{child.evaluates}' exists"
                         )
+                    elif isinstance(child, JudgeNode) and child.on_veto == "retry":
+                        target = agent_nodes.get(child.evaluates)
+                        if target is not None and target.max_rounds < 2:
+                            issues.append(
+                                f"Node '{child.name}' (in ParallelNode '{node.name}'): "
+                                f"on_veto='retry' requires AgentNode '{child.evaluates}' "
+                                f"to have max_rounds >= 2, got {target.max_rounds}"
+                            )
 
         # Check state_cls has defaults on all fields
         if self.state_cls is not None:
@@ -110,6 +125,20 @@ class Blueprint:
                 for child in node.sub_blueprint.nodes:
                     names.add(child.name)
         return names
+
+    def _collect_agent_nodes(self) -> dict[str, AgentNode]:
+        """Collect all agent nodes, including those inside ParallelNode and LoopNode blueprints."""
+        agents: dict[str, AgentNode] = {}
+        for node in self.nodes:
+            if isinstance(node, AgentNode):
+                agents[node.name] = node
+            elif isinstance(node, ParallelNode):
+                for child in node.nodes:
+                    if isinstance(child, AgentNode):
+                        agents[child.name] = child
+            elif isinstance(node, LoopNode) and isinstance(node.sub_blueprint, Blueprint):
+                agents.update(node.sub_blueprint._collect_agent_nodes())
+        return agents
 
     # --- Composition ---
 

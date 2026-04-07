@@ -85,6 +85,7 @@ spotify_blueprint = Blueprint(
             tools=[*CODE_TOOLS, *SHELL_TOOLS],
             max_iterations=80,
             token_budget=60_000,
+            max_rounds=3,
         ),
 
         # Judge evaluates the diff from implement.

@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+import tomllib
 import uuid
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any, Callable
 
 from minion._internal.engine import _NodeAbort, _NodeEscalate, execute_blueprint
@@ -21,6 +23,58 @@ from minion.trace import Trace, TraceEvent
 
 class ConfigurationError(Exception):
     """Raised when Minion cannot resolve its configuration."""
+
+
+_MODEL_DEFAULT = "claude-sonnet-4-6"
+_BLUEPRINT_DEFAULT = "coding"
+_ENVIRONMENT_DEFAULT = "local"
+
+
+def _find_project_root(start: Path | None = None) -> Path:
+    """Find the nearest project root by walking upward for pyproject.toml or .git."""
+    current = (start or Path.cwd()).resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / "pyproject.toml").exists() or (candidate / ".git").exists():
+            return candidate
+    return current
+
+
+def _load_toml_table(path: Path, *keys: str) -> dict[str, Any]:
+    """Return a nested TOML table or an empty dict."""
+    if not path.exists():
+        return {}
+
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    current: Any = data
+    for key in keys:
+        if not isinstance(current, dict) or key not in current:
+            return {}
+        current = current[key]
+    return current if isinstance(current, dict) else {}
+
+
+def _load_minion_file_config(project_root: Path) -> dict[str, Any]:
+    """Load user config from minion.toml, then pyproject.toml [tool.minion]."""
+    minion_config = _load_toml_table(project_root / "minion.toml", "minion")
+    if minion_config:
+        return minion_config
+    return _load_toml_table(project_root / "pyproject.toml", "tool", "minion")
+
+
+def _resolve_constructor_value(
+    explicit: str | object,
+    default_string: str,
+) -> str | object | None:
+    """Return the explicit constructor value if it should bypass config resolution."""
+    if not isinstance(explicit, str):
+        return explicit
+    if explicit != default_string:
+        return explicit
+    return None
 
 
 class Minion:
@@ -38,13 +92,52 @@ class Minion:
         storage: str | None = None,
         max_concurrent: int = 1,
     ) -> None:
-        self._model_spec = model
-        self._blueprint_spec = blueprint
-        self._environment_spec = environment
+        project_root = _find_project_root()
+        file_config = _load_minion_file_config(project_root)
+
+        self._model_spec = self._resolve_spec(
+            explicit=model,
+            default_string=_MODEL_DEFAULT,
+            config_value=file_config.get("model"),
+            env_var="MINION_MODEL",
+            fallback=_MODEL_DEFAULT,
+        )
+        self._blueprint_spec = self._resolve_spec(
+            explicit=blueprint,
+            default_string=_BLUEPRINT_DEFAULT,
+            config_value=file_config.get("blueprint"),
+            env_var="MINION_BLUEPRINT",
+            fallback=_BLUEPRINT_DEFAULT,
+        )
+        self._environment_spec = self._resolve_spec(
+            explicit=environment,
+            default_string=_ENVIRONMENT_DEFAULT,
+            config_value=file_config.get("environment"),
+            env_var="MINION_ENVIRONMENT",
+            fallback=_ENVIRONMENT_DEFAULT,
+        )
         self._config = config or RunConfig()
         self._storage = storage
         self._max_concurrent = max_concurrent
         self._hooks: dict[MinionEvent, list[Callable]] = {}
+
+    @staticmethod
+    def _resolve_spec(
+        explicit: str | object,
+        default_string: str,
+        config_value: Any,
+        env_var: str,
+        fallback: str,
+    ) -> str | object:
+        constructor_value = _resolve_constructor_value(explicit, default_string)
+        if constructor_value is not None:
+            return constructor_value
+        if config_value is not None:
+            return config_value
+        env_value = os.environ.get(env_var)
+        if env_value is not None:
+            return env_value
+        return fallback
 
     def on(self, event: MinionEvent) -> Callable:
         """Decorator to register event hooks."""

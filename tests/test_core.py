@@ -9,13 +9,11 @@ from minion import (
     Blueprint,
     BlueprintValidationError,
     DeterministicNode,
-    EscalationResult,
     JudgeNode,
     LoopNode,
     Minion,
     ParallelNode,
     RunContext,
-    RunResult,
     Task,
     tool,
     ToolDefinitionError,
@@ -134,7 +132,7 @@ class TestBlueprintValidation:
         bp = Blueprint(
             name="good",
             nodes=[
-                AgentNode("impl", system_prompt="do it", tools=[]),
+                AgentNode("impl", system_prompt="do it", tools=[], max_rounds=2),
                 JudgeNode(name="judge", evaluates="impl", criteria="check"),
             ],
         )
@@ -301,19 +299,11 @@ class TestRunResultAssertions:
             result.assert_node_skipped("setup")
 
 
-@pytest.mark.asyncio
-async def test_agent_max_rounds_escalates_on_judge_retry():
-    """Judge-triggered retries must respect AgentNode.max_rounds."""
+def test_agent_max_rounds_validates_for_judge_retry():
+    """Judge retry requires the target AgentNode to be re-enterable."""
 
     class S(BaseModel):
         branch: str = ""
-
-    model = MockModel(responses=[
-        ModelResponse(tool_calls=[
-            ToolCall("done", {"summary": "Implemented", "files_changed": ["a.py"]}),
-        ]),
-        ModelResponse(text="VETO: needs another pass", input_tokens=7, output_tokens=3),
-    ])
 
     bp = Blueprint(
         name="judge_retry_limit",
@@ -336,10 +326,8 @@ async def test_agent_max_rounds_escalates_on_judge_retry():
         ],
     )
 
-    result = await run_blueprint_test(bp, "test task", model, MockEnvironment())
-    assert isinstance(result, EscalationResult)
-    assert result.node == "implement"
-    assert "max_rounds" in result.reason
+    with pytest.raises(BlueprintValidationError, match="max_rounds >= 2"):
+        bp.validate()
 
 
 @pytest.mark.asyncio

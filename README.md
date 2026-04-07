@@ -42,5 +42,6 @@ If one of those disagrees with older design notes, the current contract wins.
 
 - examples define the intended API
 - implementation in `src/minion/` exists and is being refined toward that contract
+- public examples are backed by executable contract tests in `tests/test_examples_contracts.py`
 - MCP support now lives under `src/minion/tools/mcp/` as a package-level client subsystem
 - research and design references live under `design/`

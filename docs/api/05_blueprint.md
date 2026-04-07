@@ -68,6 +68,7 @@ Checks:
 - Node names are unique within the blueprint
 - All `condition` functions have signature `(ctx: RunContext) -> bool`
 - `JudgeNode.evaluates` references an existing `AgentNode` name
+- `JudgeNode(on_veto="retry")` only targets `AgentNode`s with `max_rounds >= 2`
 - `state_cls` is a valid Pydantic model with defaults on all fields
 - `max_rounds >= 1` for all AgentNodes
 - `ParallelNode` children are valid node types
